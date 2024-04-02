@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>PAL</title>
+    <script type="text/javascript" src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js"></script>
+    <script type="text/javascript" src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins-ui.js"></script>
+    <script src="scripts/thirdparty/fetch.umd.js"></script>
+    <script src="scripts/thirdparty/promise-polyfill.min.js"></script>
+    <script src="scripts/thirdparty/url-polyfill.min.js"></script>
+    <link rel="stylesheet" href="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.css">
+    <script type="text/javascript" src="scripts/code.js"></script>
+</head>
+<body style="width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;">
+    <form id="auth">
+        <h5>Необходима авторизация</h5>
+        <label for="api_key">API Key</label>
+        <input type="text" id="api_key" name="key">
+        <button type="submit" id="login">сохранить</button>
+    </form>
+    <div id="search">
+        <label for="search_input">Искать</label>
+        <input type="text" id="search_input">
+        <button id="btn_remove_key">Удалить ключ</button>
+    </div>
+</body>
+</html>
