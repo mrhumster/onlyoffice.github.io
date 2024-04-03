@@ -1,0 +1,7 @@
+li.search-result-item {
+    cursor: pointer;
+}
+
+li.search-result-item.file {
+    color: #3c763d;
+}
