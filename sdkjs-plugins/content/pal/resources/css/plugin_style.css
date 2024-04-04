@@ -1,7 +1,39 @@
-li.search-result-item {
-    cursor: pointer;
+ul#search_result_list {
+    padding-left: 10px;
+    list-style-type: none;
 }
 
-li.search-result-item.file {
-    color: #3c763d;
+ul#search_result_list li.search-result-item {
+    cursor: pointer;
+    padding-bottom: 5px;
+}
+
+ul#search_result_list li.search-result-item.file {
+    color: #9d9d9d;
+}
+
+
+div#search_result {
+    padding: 3px;
+    height: 300px;
+    overflow: auto;
+}
+
+form#auth {
+    padding: 10px;
+    display: none;
+}
+
+div#button_panel {
+    padding: 2px;
+    display: flex;
+    justify-content: center;
+}
+
+div#search {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 10px;
+    height: 80%;
 }

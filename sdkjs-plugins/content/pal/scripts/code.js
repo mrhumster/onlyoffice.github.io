@@ -1,17 +1,17 @@
 function debounce(func, wait, immediate) {
-    var timeout;
+    let timeout;
     return function() {
-        var context = this, args = arguments;
-        var later = function() {
+        const context = this, args = arguments;
+        const later = function () {
             timeout = null;
             if (!immediate) func.apply(context, args);
         };
-        var callNow = immediate && !timeout;
+        const callNow = immediate && !timeout;
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
         if (callNow) func.apply(context, args);
     };
-};
+}
 
 (function (window, undefined) {
     window.Asc.plugin.init = function () {
@@ -56,8 +56,21 @@ function debounce(func, wait, immediate) {
             getArticleStringById(article_id)
                 .then((resp) => {
                     const link = resp['link']
-                    console.log(link)
-                    window.Asc.plugin.executeMethod("PasteText", [link])
+                    Asc.scope.link = link
+                    window.Asc.plugin.callCommand(() => {
+                        const oDocument = Api.GetDocument();
+                        const length = oDocument.GetElementsCount()
+                        if (oDocument.Search("Список литературы").length === 0) {
+                            const oParagraph = Api.CreateParagraph()
+                            oParagraph.AddText("Список литературы");
+                            oParagraph.AddLineBreak();
+                            oDocument.Push(oParagraph);
+                        }
+                        const aSearch = oDocument.Search("Список литературы");
+                        console.log(aSearch)
+                        aSearch[0].AddText(Asc.scope.link);
+
+                    }, false);
                 })
         }
 
@@ -66,6 +79,28 @@ function debounce(func, wait, immediate) {
             const list = document.createElement('ul');
             list.setAttribute('id', 'search_result_list');
             elements.searchResult.appendChild(list)
+
+            const createFileSearchResult = (element) => {
+                const articleId = element['fields']['articles'][0];
+                const container = document.createElement('div')
+                container.style.display = 'flex';
+                container.style.flexDirection = 'column';
+                const fileName = document.createElement('div');
+                fileName.style.display = 'flex';
+                fileName.appendChild(document.createTextNode(element['fields']['file_name'][0]));
+                const btnContainer = document.createElement('div');
+                btnContainer.style.display = 'flex';
+                const addButton = document.createElement('button')
+                addButton.appendChild(document.createTextNode('Вставить в документ'))
+                addButton.classList.add('btn-text-default');
+                addButton.setAttribute('data-article-id', articleId)
+                addButton.onclick = handleSearchResultItemClick;
+                btnContainer.appendChild(addButton);
+                container.appendChild(fileName);
+                container.appendChild(btnContainer);
+                return container;
+            }
+
             const renderSearchResult = (element, index, array) => {
                 let articleId;
                 const li = document.createElement('li');
@@ -73,8 +108,7 @@ function debounce(func, wait, immediate) {
                 list.appendChild(li);
 
                 if (element['_index'] === 'files') {
-                    articleId = element['fields']['articles'][0]
-                    li.innerHTML=li.innerHTML + element['fields']['file_name'][0]
+                    li.appendChild(createFileSearchResult(element));
                     li.classList.add('file')
                 }
                 if (element['_index'] === 'articles') {
@@ -82,18 +116,6 @@ function debounce(func, wait, immediate) {
                     li.innerHTML=li.innerHTML + element['fields']['title'][0]
                     li.classList.add('article')
                 }
-                li.setAttribute('data-article-id', articleId)
-                li.onclick = handleSearchResultItemClick;
-                /*
-                getArticleById(articleId).then((article) => {
-                    const li = document.createElement('li');
-                    li.setAttribute('class','item');
-                    list.appendChild(li);
-                    console.log(li.innerHTML);
-                    li.innerHTML=li.innerHTML + article['data'][0]['title'];
-                })
-                 */
-
             }
             response['hits']['hits'].forEach(renderSearchResult);
         }
@@ -101,7 +123,11 @@ function debounce(func, wait, immediate) {
         const handleChange = (e) => {
             const query = e.target.value;
             const searchResult = getSearchResult(query)
-            searchResult.then((response) => createListResult(response))
+            searchResult
+                .then((response) => createListResult(response))
+                .catch((error) => {
+                    handleRemoveKey()
+                })
         }
 
         const handleRemoveKey = () => {
@@ -113,7 +139,7 @@ function debounce(func, wait, immediate) {
         const key = localStorage.getItem("x-api-key");
         if (key) {
             elements.authForm.style.display = 'none';
-            elements.search.style.display = 'block';
+            elements.search.style.display = 'flex';
         } else {
             elements.authForm.style.display = 'block';
             elements.search.style.display = 'none';
@@ -126,4 +152,5 @@ function debounce(func, wait, immediate) {
     window.Asc.plugin.button = function (id) {
         this.executeCommand("close", "");
     };
+
 })(window, undefined);

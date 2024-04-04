@@ -13,19 +13,17 @@
     <script type="text/javascript" src="scripts/code.js"></script>
 </head>
 <body style="width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;">
+    <div id="button_panel">
+        <button id="btn_remove_key" class="btn-text-default">Другой пользователь</button>
+    </div>
     <form id="auth">
-        <h5>Необходима авторизация</h5>
-        <label for="api_key">API Key</label>
-        <input type="text" id="api_key" name="key">
-        <button type="submit" id="login">сохранить</button>
+        <label class="header">Необходима авторизация</label>
+        <input class="form-control" type="text" id="api_key" name="key" placeholder="Введи ключ приложения">
+        <button class="btn-text-default submit primary" type="submit" id="login">Ок</button>
     </form>
     <div id="search">
-        <label for="search_input">Искать</label>
-        <input type="text" id="search_input">
-        <button id="btn_remove_key">Удалить ключ</button>
-    </div>
-    <div id="search_result">
-        <p>Ничего не найдено</p>
+        <input class="form-control" type="text" id="search_input" placeholder="Поиск...">
+        <div id="search_result"></div>
     </div>
 </body>
 </html>
