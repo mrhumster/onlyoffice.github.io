@@ -1,3 +1,50 @@
+const localStorageItemsKey = {
+    docId: 'pal-document-id',
+    palDoc: 'pal-doc',
+    apiKey: 'x-api-key'
+}
+
+const BASE_URI = 'https://base/api'
+
+const getApiKey = () => {
+    return localStorage.getItem(localStorageItemsKey.apiKey)
+}
+
+const setApiKey = (value) => {
+    return localStorage.setItem(localStorageItemsKey.apiKey, value)
+}
+
+const delApiKey = () => {
+    return localStorage.removeItem(localStorageItemsKey.apiKey)
+}
+
+const getDocId = () => {
+    return localStorage.getItem(localStorageItemsKey.docId)
+}
+
+const setDocId = (value) => {
+    return localStorage.setItem(localStorageItemsKey.docId, value)
+}
+
+const delDocId = () => {
+    return localStorage.removeItem(localStorageItemsKey.docId)
+}
+
+const headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "x-api-key": getApiKey()
+}
+
+const saveDocumentToLocalStorage = (palDoc) => {
+    return localStorage.setItem(localStorageItemsKey.palDoc, JSON.stringify(palDoc))
+}
+
+const getDocumentFromLocalStorage = () => {
+    const pal_document = localStorage.getItem(localStorageItemsKey.palDoc)
+    return JSON.parse(pal_document)
+}
+
 function debounce(func, wait, immediate) {
     let timeout;
     return function() {
@@ -13,8 +60,69 @@ function debounce(func, wait, immediate) {
     };
 }
 
+
 (function (window, undefined) {
     window.Asc.plugin.init = function () {
+
+        const readDocId = () => {
+            const docId = localStorage.getItem(localStorageItemsKey.docId)
+            if (docId) return docId
+            else return false
+        }
+
+
+        const createNewDocumentInPal = async () => {
+            const key = localStorage.getItem(localStorageItemsKey.apiKey);
+            const response = await fetch(`${BASE_URI}/documents`,
+                {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify({articles: []})
+                }
+            );
+            const data =  await response.json();
+            if (data.code === 200) saveDocumentToLocalStorage(data.data[0])
+            return data
+        }
+        if (!readDocId()) {
+            createNewDocumentInPal()
+                .then((resp) => {
+                    setDocId(resp.id)
+                    getDocumentById(resp.id).then((data) => {
+                        if (data.code === 200) {
+                            console.log(data.data[0])
+                        }
+                    })
+                })
+                .catch((err) => console.error(err))
+        }
+
+        const getDocumentById = async (document_id) => {
+            const response = await fetch(`${BASE_URI}/documents/${document_id}`, {
+                headers: headers
+            })
+            const data = await response.json()
+            if (data.code === 200 && data.data.length === 1) {
+                const document = data.data[0]
+                saveDocumentToLocalStorage(document)
+                return data.data[0]
+            }
+        }
+        const updateDocumentById = async (document_id, articles) => {
+            const response = await fetch(`${BASE_URI}/documents/${document_id}`, {
+                method: 'PUT',
+                headers: headers,
+                body: JSON.stringify({
+                    articles: articles
+                })
+            })
+            const data = await response.json()
+            if (data.code === 200) {
+                saveDocumentToLocalStorage(data.data[0])
+            }
+            return data.data[0]
+        }
+
         const elements = {
             searchInput: document.getElementById('search_input'),
             search: document.getElementById('search'),
@@ -31,47 +139,104 @@ function debounce(func, wait, immediate) {
 
         const getSearchResult = async (query) => {
             const key = localStorage.getItem("x-api-key");
-            const response = await fetch('https://base/api/search?' + new URLSearchParams({query: query}),
-                {headers: {"Accept": "application/json",  "x-api-key": key}});
+            const response = await fetch(`${BASE_URI}/search?` + new URLSearchParams({query: query}),
+                {headers: headers});
             return await response.json();
         }
 
         const getArticleById = async (article_id) => {
             const key = localStorage.getItem("x-api-key");
-            const response = await fetch(`https://base/api/articles/${article_id}`,
+            const response = await fetch(`${BASE_URI}/articles/${article_id}`,
                 {headers: {"Accept": "application/json",  "x-api-key": key}});
             return await response.json();
         }
 
         const getArticleStringById = async (article_id) => {
             const key = localStorage.getItem("x-api-key");
-            const response = await fetch(`https://base/api/articles/${article_id}/str`,
+            const response = await fetch(`${BASE_URI}/articles/${article_id}/str`,
                 {headers: {"Accept": "application/json",  "x-api-key": key}});
             return await response.json();
         }
 
-        const handleSearchResultItemClick = (e) => {
+        const handleSearchResultItemClick = async (e) => {
             const article_id = e.target.getAttribute('data-article-id')
-            console.log(article_id)
+            const {id, articles} = getDocumentFromLocalStorage();
+            updateDocumentById(id, [...articles, article_id])
+                .then((response) => {
+                    console.log('Document updated',response)
+                    Asc.scope.article_id = article_id;
+                    window.Asc.plugin.callCommand(() => {
+                        const oDocument = Api.GetDocument();
+                        const oRange = oDocument.GetRangeBySelect();
+                        //[${Asc.scope.article_id}]
+                        console.log(oRange.GetText())
+                        oRange.AddText(`[1] `, 'after')
+                        oRange.AddRef
+                        console.log(oRange.GetText())
+                    })
+                })
+
+            /*
             getArticleStringById(article_id)
                 .then((resp) => {
                     const link = resp['link']
+                    Asc.scope.article_id = article_id;
                     Asc.scope.link = link
                     window.Asc.plugin.callCommand(() => {
-                        const oDocument = Api.GetDocument();
-                        const length = oDocument.GetElementsCount()
-                        if (oDocument.Search("Список литературы").length === 0) {
-                            const oParagraph = Api.CreateParagraph()
-                            oParagraph.AddText("Список литературы");
-                            oParagraph.AddLineBreak();
-                            oDocument.Push(oParagraph);
-                        }
-                        const aSearch = oDocument.Search("Список литературы");
-                        console.log(aSearch)
-                        aSearch[0].AddText(Asc.scope.link);
+                        const createBibliography = (oDocument) => {
+                            const oTocPr = {
+                                "ShowPageNums": true,
+                                "RightAlgn": true,
+                                "LeaderType": "dot",
+                                "FormatAsLinks": true,
+                                "BuildFrom": {"OutlineLvls": 9},
+                                "TocStyle": "standard"
+                            };
 
+                            oDocument.AddTableOfContents(oTocPr)
+                        }
+                        const createCrossRef = (bookmarkName) => {
+                            const currentSelect = oDocument.GetRangeBySelect();
+                            const oParagraph = currentSelect.GetParagraph(0)
+                            oParagraph.AddBookmarkCrossRef("aboveBelow", bookmarkName);
+                        }
+                        const addArticleAndAddBookmark = (oParagraph) => {
+                            const oRun = oParagraph.AddText(Asc.scope.link);
+                            const oRange = oRun.GetRange(0, 3);
+                            oRange.AddBookmark(Asc.scope.article_id)
+                        }
+                        const oDocument = Api.GetDocument();
+                        const oParagraphs = oDocument.GetAllParagraphs();
+                        let isToxFind = false;
+                        oParagraphs.map((oParagraph) => {
+                            const oRanges = oParagraph.Search("Библиография", false)
+                            if (oRanges[0]) {
+                                // Найден Список литературы
+                                isToxFind = true;
+                                oParagraph.AddLineBreak();
+                                addArticleAndAddBookmark(oParagraph)
+                                createCrossRef(Asc.scope.article_id);
+                                createBibliography(oDocument);
+                            }
+                        });
+                        if (!isToxFind) {
+                            const oParagraph = Api.CreateParagraph()
+                            oParagraph.SetSpacingLine(240)
+                            oParagraph.AddPageBreak();
+                            oDocument.Push(oParagraph);
+                            oParagraph.AddText("Библиография")
+                            const header = oParagraph.GetRange(0, 13)
+                            header.SetBold();
+                            header.SetFontSize(16);
+                            header.AddBookmark('bibliography');
+                            oParagraph.AddLineBreak();
+                            addArticleAndAddBookmark(oParagraph)
+                            createCrossRef(Asc.scope.article_id);
+                        }
                     }, false);
                 })
+
+             */
         }
 
         const createListResult = (response) => {

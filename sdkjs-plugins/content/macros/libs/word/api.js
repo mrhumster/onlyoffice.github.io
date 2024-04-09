@@ -2153,7 +2153,7 @@ ApiDocument.prototype.SetControlsHighlight = function(r, g, b, bNone){};
  * <note>Please note that the new table of contents replaces the existing table of contents.</note>
  * @memberof ApiDocument
  * @typeofeditors ["CDE"]
- * @param {TocPr} [oTocPr={}] - Table of contents properties.
+ * @param {{FormatAsLinks: boolean, ShowPageNums: boolean, BuildFrom: {OutlineLvls: number}, LeaderType: string, TocStyle: string, RightAlgn: boolean}} [oTocPr={}] - Table of contents properties.
  */
 ApiDocument.prototype.AddTableOfContents = function(oTocPr){};
 
