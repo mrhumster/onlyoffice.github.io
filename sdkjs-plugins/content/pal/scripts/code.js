@@ -118,9 +118,9 @@ function debounce(func, wait, immediate) {
             })
             const data = await response.json()
             if (data.code === 200) {
-                saveDocumentToLocalStorage(data.data[0])
+                saveDocumentToLocalStorage(data)
             }
-            return data.data[0]
+            return data
         }
 
         const elements = {
@@ -163,17 +163,36 @@ function debounce(func, wait, immediate) {
             const {id, articles} = getDocumentFromLocalStorage();
             updateDocumentById(id, [...articles, article_id])
                 .then((response) => {
-                    console.log('Document updated',response)
                     Asc.scope.article_id = article_id;
-                    window.Asc.plugin.callCommand(() => {
-                        const oDocument = Api.GetDocument();
-                        const oRange = oDocument.GetRangeBySelect();
-                        //[${Asc.scope.article_id}]
-                        console.log(oRange.GetText())
-                        oRange.AddText(`[1] `, 'after')
-                        oRange.AddRef
-                        console.log(oRange.GetText())
-                    })
+                    // window.Asc.plugin.executeMethod ("PasteHtml", ["<p><b>Plugin methods for OLE objects</b></p><ul><li>AddOleObject</li><li>EditOleObject</li></ul>"]);
+                    var oControlPrContent = {
+                        "Props": {
+                            "Id": 100,
+                            "Tag": "CC_Tag",
+                            "Lock": 3
+                        },
+                        "Script": "var oParagraph = Api.CreateParagraph();oParagraph.AddText('Hello world!');Api.GetDocument().InsertContent([oParagraph]);"
+                    };
+                    var arrDocuments = [oControlPrContent];
+                    window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
+                    // GETALLCONTENTCONTROL
+                    var flagInit = false;
+                    window.Asc.plugin.init = function (text) {
+                        if (!flagInit) {
+                            this.executeMethod ("GetAllContentControls", null, function (data) {
+                                for (var i = 0; i < data.length; i++) {
+                                    console.log(data[i])
+                                    if (data[i].Tag == 'CC_Tag') {
+                                        this.Asc.plugin.executeMethod ("SelectContentControl", [data[i].InternalId]);
+                                        break;
+                                    }
+                                }
+                            });
+                            flagInit = true;
+                            console.log('sss')
+                        }
+                    };
+                    //
                 })
 
             /*
@@ -246,24 +265,32 @@ function debounce(func, wait, immediate) {
             elements.searchResult.appendChild(list)
 
             const createFileSearchResult = (element) => {
-                const articleId = element['fields']['articles'][0];
-                const container = document.createElement('div')
-                container.style.display = 'flex';
-                container.style.flexDirection = 'column';
-                const fileName = document.createElement('div');
-                fileName.style.display = 'flex';
-                fileName.appendChild(document.createTextNode(element['fields']['file_name'][0]));
-                const btnContainer = document.createElement('div');
-                btnContainer.style.display = 'flex';
-                const addButton = document.createElement('button')
-                addButton.appendChild(document.createTextNode('Вставить в документ'))
-                addButton.classList.add('btn-text-default');
-                addButton.setAttribute('data-article-id', articleId)
-                addButton.onclick = handleSearchResultItemClick;
-                btnContainer.appendChild(addButton);
-                container.appendChild(fileName);
-                container.appendChild(btnContainer);
-                return container;
+                if (element['fields']['articles']) {
+                    const articleId = element['fields']['articles'][0];
+                    const container = document.createElement('div')
+                    container.style.display = 'flex';
+                    container.style.flexDirection = 'column';
+                    const fileName = document.createElement('div');
+                    fileName.style.display = 'flex';
+                    fileName.appendChild(document.createTextNode(element['fields']['file_name'][0]));
+                    const btnContainer = document.createElement('div');
+                    btnContainer.style.display = 'flex';
+                    const addButton = document.createElement('button')
+                    addButton.appendChild(document.createTextNode('Вставить в документ'))
+                    addButton.classList.add('btn-text-default');
+                    addButton.setAttribute('data-article-id', articleId)
+                    addButton.onclick = handleSearchResultItemClick;
+                    btnContainer.appendChild(addButton);
+                    container.appendChild(fileName);
+                    container.appendChild(btnContainer);
+                    return container;
+                }
+            }
+
+            const createArticleSearchItem = async (articleId) => {
+                // TODO: Create article search item
+                const article = await getArticleById(articleId)
+                console.log(article)
             }
 
             const renderSearchResult = (element, index, array) => {
@@ -273,11 +300,15 @@ function debounce(func, wait, immediate) {
                 list.appendChild(li);
 
                 if (element['_index'] === 'files') {
-                    li.appendChild(createFileSearchResult(element));
-                    li.classList.add('file')
+                    const fileSearchItem = createFileSearchResult(element)
+                    if (fileSearchItem) {
+                        li.appendChild(fileSearchItem);
+                        li.classList.add('file')
+                    }
                 }
                 if (element['_index'] === 'articles') {
                     articleId = element['_id'];
+                    const articleSearchItem = createArticleSearchItem(articleId)
                     li.innerHTML=li.innerHTML + element['fields']['title'][0]
                     li.classList.add('article')
                 }
@@ -289,7 +320,9 @@ function debounce(func, wait, immediate) {
             const query = e.target.value;
             const searchResult = getSearchResult(query)
             searchResult
-                .then((response) => createListResult(response))
+                .then((response) => {
+                    createListResult(response)
+                })
                 .catch((error) => {
                     handleRemoveKey()
                 })
