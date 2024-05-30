@@ -128,13 +128,28 @@ function debounce(func, wait, immediate) {
             search: document.getElementById('search'),
             searchResult: document.getElementById('search_result'),
             authForm: document.getElementById('auth'),
-            btnRemoveKey: document.getElementById('btn_remove_key')
+            btnRemoveKey: document.getElementById('btn_remove_key'),
+            btnArticleList: document.getElementById('btn_article_list'),
+            btnSearch: document.getElementById('btn_search'),
+            articleList: document.getElementById('articles_list')
         }
         const handleSubmit = (e) => {
             const api_key = e.target.elements['api_key'].value;
             localStorage.setItem("x-api-key", api_key);
             elements.authForm.style.display = 'none';
+            elements.articleList.style.display = 'none';
+            elements.search.style.display = 'none';
+        }
+
+        const showList = () => {
+            elements.authForm.style.display = 'none';
+            elements.search.style.display = 'none';
+            elements.articleList.style.display = 'block';
+        }
+        const showSearch = () => {
+            elements.authForm.style.display = 'none';
             elements.search.style.display = 'block';
+            elements.articleList.style.display = 'none';
         }
 
         const getSearchResult = async (query) => {
@@ -332,20 +347,34 @@ function debounce(func, wait, immediate) {
             localStorage.removeItem("x-api-key")
             elements.authForm.style.display = 'block';
             elements.search.style.display = 'none';
+            elements.articleList.style.display = 'none';
+            elements.btnRemoveKey.style.display = 'none'
+            elements.btnSearch.style.display = 'none';
+            elements.btnArticleList.style.display = 'none';
         }
 
         const key = localStorage.getItem("x-api-key");
         if (key) {
             elements.authForm.style.display = 'none';
+            elements.btnRemoveKey.style.display = 'block';
+            elements.articleList.style.display = 'none'
             elements.search.style.display = 'flex';
+            elements.btnArticleList.style.display = 'block';
+            elements.btnSearch.style.display = 'block';
         } else {
             elements.authForm.style.display = 'block';
+            elements.btnRemoveKey.style.display = 'none';
             elements.search.style.display = 'none';
+            elements.articleList.style.display = 'none';
+            elements.btnArticleList.style.display = 'none';
+            elements.btnSearch.style.display = 'none';
         }
 
         elements.authForm.onsubmit = handleSubmit;
         elements.btnRemoveKey.onclick = handleRemoveKey;
         elements.searchInput.onkeyup = debounce(handleChange, 300);
+        elements.btnArticleList.onclick = showList;
+        elements.btnSearch.onclick = showSearch;
     };
     window.Asc.plugin.button = function (id) {
         this.executeCommand("close", "");
