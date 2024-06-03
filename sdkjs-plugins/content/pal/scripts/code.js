@@ -47,7 +47,7 @@ const getDocumentFromLocalStorage = () => {
 
 function debounce(func, wait, immediate) {
     let timeout;
-    return function() {
+    return function () {
         const context = this, args = arguments;
         const later = function () {
             timeout = null;
@@ -63,13 +63,13 @@ function debounce(func, wait, immediate) {
 
 (function (window, undefined) {
     window.Asc.plugin.init = function () {
-
         const readDocId = () => {
             const docId = localStorage.getItem(localStorageItemsKey.docId)
             if (docId) return docId
             else return false
         }
 
+        const docId = readDocId();
 
         const createNewDocumentInPal = async () => {
             const key = localStorage.getItem(localStorageItemsKey.apiKey);
@@ -80,33 +80,20 @@ function debounce(func, wait, immediate) {
                     body: JSON.stringify({articles: []})
                 }
             );
-            const data =  await response.json();
-            if (data.code === 200) saveDocumentToLocalStorage(data.data[0])
+            const data = await response.json();
+            saveDocumentToLocalStorage(data)
+            setDocId(data.id)
             return data
         }
-        if (!readDocId()) {
-            createNewDocumentInPal()
-                .then((resp) => {
-                    setDocId(resp.id)
-                    getDocumentById(resp.id).then((data) => {
-                        if (data.code === 200) {
-                            console.log(data.data[0])
-                        }
-                    })
-                })
-                .catch((err) => console.error(err))
-        }
+
 
         const getDocumentById = async (document_id) => {
             const response = await fetch(`${BASE_URI}/documents/${document_id}`, {
                 headers: headers
             })
             const data = await response.json()
-            if (data.code === 200 && data.data.length === 1) {
-                const document = data.data[0]
-                saveDocumentToLocalStorage(document)
-                return data.data[0]
-            }
+            saveDocumentToLocalStorage(data)
+            return data
         }
         const updateDocumentById = async (document_id, articles) => {
             const response = await fetch(`${BASE_URI}/documents/${document_id}`, {
@@ -117,9 +104,7 @@ function debounce(func, wait, immediate) {
                 })
             })
             const data = await response.json()
-            if (data.code === 200) {
-                saveDocumentToLocalStorage(data)
-            }
+            saveDocumentToLocalStorage(data)
             return data
         }
 
@@ -141,14 +126,66 @@ function debounce(func, wait, immediate) {
             elements.search.style.display = 'none';
         }
 
-        const showList = () => {
+        const removeArticleFromList = async (article_id) => {
+            const articles_list = document.querySelectorAll(`[data-article-id='${article_id}']`)
+            const article_array = [...articles_list]
+            article_array.forEach(div => div.remove())
+        }
+
+        const removeArticleFromDocumentClickHandler = async (e) => {
+            // TODO: Удаление ссылок из документов
+            const article_id = e.target.getAttribute('data-article-id')
+            const articles = getDocumentFromLocalStorage().articles.filter((item) => item !== article_id)
+            const document_id = getDocumentFromLocalStorage().id
+            const updated_doc = await updateDocumentById(document_id, articles)
+            await removeArticleFromList(article_id);
+        }
+
+        const updateArticleList = async () => {
+            const doc = getDocumentFromLocalStorage();
+            if (doc) {
+                elements.articleList.innerHTML = null;
+                const title = document.createElement('h2')
+                title.style.gridColumn = "span 2 / span 2";
+                title.style.textAlign = "center";
+                title.appendChild(document.createTextNode('Библиография'))
+                elements.articleList.appendChild(title)
+                doc['articles'].map((articleId) => {
+                    const response = getArticleById(articleId);
+                    response
+                        .then((article) => {
+                            const articleTitle = document.createElement('div')
+                            articleTitle.style.display = 'flex';
+                            articleTitle.style.justifyContent = 'center';
+                            articleTitle.style.alignContent = 'center';
+                            articleTitle.style.flexDirection = 'column';
+                            articleTitle.setAttribute('data-article-id', article['id'])
+                            articleTitle.appendChild(document.createTextNode(article['title']))
+
+                            const removeBtn = document.createElement('button');
+                            removeBtn.classList.add("btn-text-default");
+                            removeBtn.setAttribute('data-article-id', article['id'])
+                            removeBtn.appendChild(document.createTextNode('🚫'));
+                            removeBtn.addEventListener('click', removeArticleFromDocumentClickHandler)
+
+                            elements.articleList.appendChild(articleTitle)
+                            elements.articleList.appendChild(removeBtn);
+                        })
+                        .catch((error) => {
+                            console.log(error);
+                        })
+                });
+            }
+        }
+
+        const showList = async () => {
             elements.authForm.style.display = 'none';
             elements.search.style.display = 'none';
-            elements.articleList.style.display = 'block';
+            elements.articleList.style.display = 'grid';
         }
         const showSearch = () => {
             elements.authForm.style.display = 'none';
-            elements.search.style.display = 'block';
+            elements.search.style.display = 'flex';
             elements.articleList.style.display = 'none';
         }
 
@@ -160,16 +197,16 @@ function debounce(func, wait, immediate) {
         }
 
         const getArticleById = async (article_id) => {
-            const key = localStorage.getItem("x-api-key");
+            // const key = localStorage.getItem("x-api-key");
             const response = await fetch(`${BASE_URI}/articles/${article_id}`,
-                {headers: {"Accept": "application/json",  "x-api-key": key}});
+                {headers: headers});
             return await response.json();
         }
 
         const getArticleStringById = async (article_id) => {
             const key = localStorage.getItem("x-api-key");
             const response = await fetch(`${BASE_URI}/articles/${article_id}/str`,
-                {headers: {"Accept": "application/json",  "x-api-key": key}});
+                {headers: headers});
             return await response.json();
         }
 
@@ -178,38 +215,8 @@ function debounce(func, wait, immediate) {
             const {id, articles} = getDocumentFromLocalStorage();
             updateDocumentById(id, [...articles, article_id])
                 .then((response) => {
-                    Asc.scope.article_id = article_id;
-                    // window.Asc.plugin.executeMethod ("PasteHtml", ["<p><b>Plugin methods for OLE objects</b></p><ul><li>AddOleObject</li><li>EditOleObject</li></ul>"]);
-                    var oControlPrContent = {
-                        "Props": {
-                            "Id": 100,
-                            "Tag": "CC_Tag",
-                            "Lock": 3
-                        },
-                        "Script": "var oParagraph = Api.CreateParagraph();oParagraph.AddText('Hello world!');Api.GetDocument().InsertContent([oParagraph]);"
-                    };
-                    var arrDocuments = [oControlPrContent];
-                    window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
-                    // GETALLCONTENTCONTROL
-                    var flagInit = false;
-                    window.Asc.plugin.init = function (text) {
-                        if (!flagInit) {
-                            this.executeMethod ("GetAllContentControls", null, function (data) {
-                                for (var i = 0; i < data.length; i++) {
-                                    console.log(data[i])
-                                    if (data[i].Tag == 'CC_Tag') {
-                                        this.Asc.plugin.executeMethod ("SelectContentControl", [data[i].InternalId]);
-                                        break;
-                                    }
-                                }
-                            });
-                            flagInit = true;
-                            console.log('sss')
-                        }
-                    };
-                    //
+                    updateArticleList().then(() => console.log('Updated'));
                 })
-
             /*
             getArticleStringById(article_id)
                 .then((resp) => {
@@ -275,29 +282,24 @@ function debounce(func, wait, immediate) {
 
         const createListResult = (response) => {
             elements.searchResult.innerHTML = null
-            const list = document.createElement('ul');
-            list.setAttribute('id', 'search_result_list');
-            elements.searchResult.appendChild(list)
 
-            const createFileSearchResult = (element) => {
+            const createFileSearchResult = async (element) => {
                 if (element['fields']['articles']) {
                     const articleId = element['fields']['articles'][0];
+                    const article = await getArticleById(articleId);
                     const container = document.createElement('div')
-                    container.style.display = 'flex';
-                    container.style.flexDirection = 'column';
-                    const fileName = document.createElement('div');
-                    fileName.style.display = 'flex';
-                    fileName.appendChild(document.createTextNode(element['fields']['file_name'][0]));
-                    const btnContainer = document.createElement('div');
-                    btnContainer.style.display = 'flex';
+                    container.style.display = 'grid';
+                    container.style.gridTemplateColumns = '85% 15%'
+                    const titleCont = document.createElement('div');
+                    titleCont.appendChild(document.createTextNode(article.title));
+
                     const addButton = document.createElement('button')
-                    addButton.appendChild(document.createTextNode('Вставить в документ'))
+                    addButton.appendChild(document.createTextNode('➕'))
                     addButton.classList.add('btn-text-default');
                     addButton.setAttribute('data-article-id', articleId)
                     addButton.onclick = handleSearchResultItemClick;
-                    btnContainer.appendChild(addButton);
-                    container.appendChild(fileName);
-                    container.appendChild(btnContainer);
+                    container.appendChild(titleCont);
+                    container.appendChild(addButton);
                     return container;
                 }
             }
@@ -305,30 +307,42 @@ function debounce(func, wait, immediate) {
             const createArticleSearchItem = async (articleId) => {
                 // TODO: Create article search item
                 const article = await getArticleById(articleId)
-                console.log(article)
+                const container = document.createElement('div')
+                container.style.display = 'grid';
+                container.style.gridTemplateColumns = '85% 15%'
+                const titleCont = document.createElement('div');
+                titleCont.appendChild(document.createTextNode(article.title));
+
+                const addButton = document.createElement('button')
+                addButton.appendChild(document.createTextNode('➕'))
+                addButton.classList.add('btn-text-default');
+                addButton.setAttribute('data-article-id', articleId)
+                addButton.onclick = handleSearchResultItemClick;
+                container.appendChild(titleCont);
+                container.appendChild(addButton);
+                return container;
             }
 
-            const renderSearchResult = (element, index, array) => {
-                let articleId;
-                const li = document.createElement('li');
-                li.setAttribute('class','search-result-item');
-                list.appendChild(li);
+            const renderSearchResult = async (element, index, array) => {
+                // const articleSearchItem = await createArticleSearchItem(articleId)
+                const container = document.createElement('div')
+                container.style.display = 'grid';
+                container.style.gridTemplateColumns = '85% 15%'
+                const titleCont = document.createElement('div');
+                titleCont.appendChild(document.createTextNode(element.title));
 
-                if (element['_index'] === 'files') {
-                    const fileSearchItem = createFileSearchResult(element)
-                    if (fileSearchItem) {
-                        li.appendChild(fileSearchItem);
-                        li.classList.add('file')
-                    }
-                }
-                if (element['_index'] === 'articles') {
-                    articleId = element['_id'];
-                    const articleSearchItem = createArticleSearchItem(articleId)
-                    li.innerHTML=li.innerHTML + element['fields']['title'][0]
-                    li.classList.add('article')
-                }
+                const addButton = document.createElement('button')
+                addButton.appendChild(document.createTextNode('➕'))
+                addButton.classList.add('btn-text-default');
+                addButton.setAttribute('data-article-id', element.id)
+                addButton.onclick = handleSearchResultItemClick;
+                container.appendChild(titleCont);
+                container.appendChild(addButton);
+                elements.searchResult.appendChild(container);
+
             }
-            response['hits']['hits'].forEach(renderSearchResult);
+
+            response.forEach(renderSearchResult);
         }
 
         const handleChange = (e) => {
@@ -353,7 +367,21 @@ function debounce(func, wait, immediate) {
             elements.btnArticleList.style.display = 'none';
         }
 
+        if (!getDocId()) {
+            createNewDocumentInPal()
+                .then((data) => console.info(data))
+                .catch((error) => console.error(error))
+
+        } else {
+            getDocumentById(docId)
+                .then((data) => {
+                    console.log('Документ сохранен в локальное хранилище')
+                })
+                .catch((err) => console.error('С получение нового документа что-то пошло не так!', err))
+        }
+
         const key = localStorage.getItem("x-api-key");
+
         if (key) {
             elements.authForm.style.display = 'none';
             elements.btnRemoveKey.style.display = 'block';
@@ -369,7 +397,7 @@ function debounce(func, wait, immediate) {
             elements.btnArticleList.style.display = 'none';
             elements.btnSearch.style.display = 'none';
         }
-
+        updateArticleList().then(() => console.log('Библиография обновлена'))
         elements.authForm.onsubmit = handleSubmit;
         elements.btnRemoveKey.onclick = handleRemoveKey;
         elements.searchInput.onkeyup = debounce(handleChange, 300);

@@ -14,10 +14,13 @@ ul#search_result_list li.search-result-item.file {
 
 
 div#search_result {
+    display: grid;
+    grid-template-columns: 250px;
+    grid-gap: 1em;
     padding: 3px;
-    height: 300px;
     overflow: auto;
 }
+
 
 form#auth {
     padding: 10px;
@@ -26,8 +29,9 @@ form#auth {
 
 div#button_panel {
     padding: 2px;
-    display: flex;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: auto auto auto;
+    grid-gap: 5px;
 }
 
 div#search {
@@ -36,4 +40,10 @@ div#search {
     justify-content: center;
     padding: 10px;
     height: 80%;
+}
+div#articles_list {
+    display: grid;
+    grid-template-columns: 90% 10%;
+    grid-row-gap: 5px;
+    margin: 5px 5px 5px 5px;
 }
