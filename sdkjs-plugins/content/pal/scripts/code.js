@@ -6,6 +6,25 @@ const localStorageItemsKey = {
 
 const BASE_URI = 'https://base/api'
 
+const truncateString = (string, length= 20) => {
+    if (string.length > length)
+    return `${string.slice(0, Math.trunc(length / 2))}…${string.slice(string.length - Math.trunc(length / 2))}`
+    return string
+}
+
+
+
+const urlify = (text) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, function(url) {
+        return '<a href="' + url + '" target="_blank">' + url + '</a>';
+    })
+}
+
+const normalizeHighLight = (s) => {
+    return urlify(s.replace('-\n', '').replace('- \n', ''));
+}
+
 const getApiKey = () => {
     return localStorage.getItem(localStorageItemsKey.apiKey)
 }
@@ -283,27 +302,6 @@ function debounce(func, wait, immediate) {
         const createListResult = (response) => {
             elements.searchResult.innerHTML = null
 
-            const createFileSearchResult = async (element) => {
-                if (element['fields']['articles']) {
-                    const articleId = element['fields']['articles'][0];
-                    const article = await getArticleById(articleId);
-                    const container = document.createElement('div')
-                    container.style.display = 'grid';
-                    container.style.gridTemplateColumns = '85% 15%'
-                    const titleCont = document.createElement('div');
-                    titleCont.appendChild(document.createTextNode(article.title));
-
-                    const addButton = document.createElement('button')
-                    addButton.appendChild(document.createTextNode('➕'))
-                    addButton.classList.add('btn-text-default');
-                    addButton.setAttribute('data-article-id', articleId)
-                    addButton.onclick = handleSearchResultItemClick;
-                    container.appendChild(titleCont);
-                    container.appendChild(addButton);
-                    return container;
-                }
-            }
-
             const createArticleSearchItem = async (articleId) => {
                 // TODO: Create article search item
                 const article = await getArticleById(articleId)
@@ -326,22 +324,53 @@ function debounce(func, wait, immediate) {
             const renderSearchResult = async (element, index, array) => {
                 // const articleSearchItem = await createArticleSearchItem(articleId)
                 const container = document.createElement('div')
-                container.style.display = 'grid';
-                container.style.gridTemplateColumns = '85% 15%'
+                container.classList.add('search_item_container')
                 const titleCont = document.createElement('div');
-                titleCont.appendChild(document.createTextNode(element.title));
-
+                titleCont.style.display = 'flex';
+                titleCont.style.flexDirection = 'column';
+                if (element.title) {
+                    const title = document.createElement('div')
+                    title.classList.add('search_item_container_title')
+                    title.appendChild(document.createTextNode(element.title))
+                    titleCont.appendChild(title)
+                }
+                if (element.file_name) {
+                    const fileName = document.createElement('div')
+                    fileName.classList.add('search_item_container_file')
+                    fileName.title = element.file_name;
+                    fileName.appendChild(document.createTextNode(truncateString(element.file_name, 50)))
+                    titleCont.appendChild(fileName)
+                }
+                if (element.highlights) {
+                    for (let [name, value] of Object.entries(element.highlights)) {
+                        value.map((_hl) => {
+                            const hl = document.createElement('div');
+                            hl.insertAdjacentHTML('beforeend', normalizeHighLight(_hl));
+                            hl.classList.add('search_item_container_highlight');
+                            titleCont.appendChild(hl);
+                        })
+                    }
+                }
+                const buttonsCont = document.createElement('div')
+                buttonsCont.classList.add('search_item_container_buttons_container')
                 const addButton = document.createElement('button')
-                addButton.appendChild(document.createTextNode('➕'))
+                addButton.appendChild(document.createTextNode('Добавить в библиографию'))
+                const openInWebButton = document.createElement('button')
+                openInWebButton.appendChild(document.createTextNode('Открыть в браузере'))
+                openInWebButton.classList.add('btn-text-default');
+                openInWebButton.classList.add('open_in_web_btn');
                 addButton.classList.add('btn-text-default');
+                addButton.classList.add('add_to_document_btn');
                 addButton.setAttribute('data-article-id', element.id)
                 addButton.onclick = handleSearchResultItemClick;
+                buttonsCont.appendChild(addButton);
+                buttonsCont.appendChild(openInWebButton);
                 container.appendChild(titleCont);
-                container.appendChild(addButton);
+                container.appendChild(buttonsCont)
+
                 elements.searchResult.appendChild(container);
 
             }
-
             response.forEach(renderSearchResult);
         }
 
