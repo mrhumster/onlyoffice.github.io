@@ -35,10 +35,17 @@ form#auth {
 }
 
 div#button_panel {
-    padding: 2px;
+    padding: 3px;
     display: grid;
     grid-template-columns: auto auto auto;
-    grid-gap: 5px;
+    grid-gap: 3px;
+}
+
+.buttons_container {
+    padding: 3px;
+    display: grid;
+    grid-template-columns: auto;
+    grid-gap: 3px;
 }
 
 div#search {
@@ -81,10 +88,12 @@ div#articles_list {
 }
 .search_item_container_highlight {
     border-radius: 3px;
+    border: 1px solid #cccccc;
     background-color: white;
     padding: 5px;
     margin-top: 2px;
     margin-bottom: 2px;
+    word-wrap: anywhere;
 }
 .search_item_container_buttons_container {
     display: grid;
@@ -98,4 +107,20 @@ div#articles_list {
 .add_to_document_btn:before {
     content: '➕';
     margin-right: 5px;
+}
+button#btn_remove_key:before {
+    margin-right: 5px;
+    content: '❎';
+}
+button#btn_article_list:before {
+    margin-right: 5px;
+    content: '📚';
+}
+button#btn_search:before {
+    margin-right: 5px;
+    content: '🔍';
+}
+button#btn_add_bib:before {
+    margin-right: 5px;
+    content: '🤖';
 }

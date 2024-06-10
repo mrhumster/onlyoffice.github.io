@@ -1,22 +1,22 @@
 const localStorageItemsKey = {
     docId: 'pal-document-id',
     palDoc: 'pal-doc',
-    apiKey: 'x-api-key'
+    apiKey: 'x-api-key',
+    articlesCites: 'pal-articles-cites'
 }
 
 const BASE_URI = 'https://base/api'
 
-const truncateString = (string, length= 20) => {
+const truncateString = (string, length = 20) => {
     if (string.length > length)
-    return `${string.slice(0, Math.trunc(length / 2))}…${string.slice(string.length - Math.trunc(length / 2))}`
+        return `${string.slice(0, Math.trunc(length / 2))}…${string.slice(string.length - Math.trunc(length / 2))}`
     return string
 }
 
 
-
 const urlify = (text) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, function(url) {
+    return text.replace(urlRegex, function (url) {
         return '<a href="' + url + '" target="_blank">' + url + '</a>';
     })
 }
@@ -62,6 +62,15 @@ const saveDocumentToLocalStorage = (palDoc) => {
 const getDocumentFromLocalStorage = () => {
     const pal_document = localStorage.getItem(localStorageItemsKey.palDoc)
     return JSON.parse(pal_document)
+}
+
+const saveArticleStringsToLocalStorage = (lst) => {
+    return localStorage.setItem(localStorageItemsKey.articlesCites, JSON.stringify({articles: lst}))
+}
+
+const getArticleStringsFromLocalStorage = () => {
+    const cites = localStorage.getItem(localStorageItemsKey.articlesCites)
+    return JSON.parse(cites)
 }
 
 function debounce(func, wait, immediate) {
@@ -127,6 +136,20 @@ function debounce(func, wait, immediate) {
             return data
         }
 
+        const getArticlesToString = async (fmt, locale) => {
+            const document = getDocumentFromLocalStorage();
+            const response = await fetch(`${BASE_URI}/articles/str?${new URLSearchParams({fmt: fmt, locale:  locale})}`,
+                {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify(document.articles)
+                }
+            );
+            const data = await response.json();
+            saveArticleStringsToLocalStorage(data)
+            return data
+        }
+
         const elements = {
             searchInput: document.getElementById('search_input'),
             search: document.getElementById('search'),
@@ -160,15 +183,67 @@ function debounce(func, wait, immediate) {
             await removeArticleFromList(article_id);
         }
 
+        const addBibBtnClickHandler = async () => {
+            await getArticlesToString('gost-r-7-0-5-2008', 'ru')
+            window.Asc.plugin.executeMethod("AddContentControl", [1, {
+                "Id": getDocId(),
+                "Tag": "bibliography",
+                "Lock": 3
+            }]);
+            window.Asc.plugin.executeMethod ("GetAllContentControls", null, function (data) {
+                for (var i = 0; i < data.length; i++) {
+                    console.log(data[i].internalId);
+                    if (data[i].Tag === 'bibliography') {
+                        this.Asc.plugin.executeMethod ("SelectContentControl", [data[i].InternalId]);
+                        console.log(data[i].InternalId)
+                        const cc = [{
+                            "Props": {
+                                "Id": getDocId(),
+                                "Lock": 3,
+                                "Tag": "bibliography",
+                                "InternalId": data[i].internalId
+                            },
+                            "Script":
+                                "const cites = JSON.parse(localStorage.getItem('pal-articles-cites'));" +
+                                "const articlesStrings = cites['articles'];" +
+                                "const bg = Api.CreateParagraph();" +
+                                "Api.GetDocument().InsertContent([bg]);" +
+                                "const title = Api.CreateParagraph();" +
+                                "title.AddText('Библиография');" +
+                                "bg.InsertParagraph(title, 'before', true);" +
+                                "articlesStrings.map((cite) => {" +
+                                "   const oParagraph = Api.CreateParagraph();" +
+                                "   oParagraph.AddText(cite); " +
+                                "   bg.InsertParagraph(oParagraph, 'before', true);" +
+                                "});"
+
+                        }]
+                        this.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [cc]);
+                        break;
+                    }
+                }
+            });
+        }
+
         const updateArticleList = async () => {
             const doc = getDocumentFromLocalStorage();
             if (doc) {
                 elements.articleList.innerHTML = null;
-                const title = document.createElement('h2')
+                const title = document.createElement('h2');
                 title.style.gridColumn = "span 2 / span 2";
                 title.style.textAlign = "center";
-                title.appendChild(document.createTextNode('Библиография'))
+                title.appendChild(document.createTextNode('Библиография'));
+                const btnCont = document.createElement('div');
+                btnCont.classList.add('buttons_container');
+                btnCont.style.gridColumn = "span 2 / span 2";
+                const addBibBtn = document.createElement('button');
+                addBibBtn.appendChild(document.createTextNode('Вставить библиографию'));
+                addBibBtn.classList.add('btn-text-default');
+                addBibBtn.id = 'btn_add_bib';
+                addBibBtn.onclick = addBibBtnClickHandler;
+                btnCont.appendChild(addBibBtn)
                 elements.articleList.appendChild(title)
+                elements.articleList.appendChild(btnCont)
                 doc['articles'].map((articleId) => {
                     const response = getArticleById(articleId);
                     response

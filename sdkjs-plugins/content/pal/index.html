@@ -20,11 +20,13 @@
     </div>
     <form id="auth">
         <label class="header">Необходима авторизация</label>
+        <label for="api_key"></label>
         <input class="form-control" type="text" id="api_key" name="key" placeholder="Введи ключ приложения">
         <button class="btn-text-default submit primary" type="submit" id="login">Ок</button>
     </form>
     <div id="search">
-        <input class="form-control" type="text" id="search_input" placeholder="Поиск...">
+        <label for="search_input"></label>
+        <input class="form-control" type="search" id="search_input" placeholder="Введите поисковой запрос...">
         <div id="search_result"></div>
     </div>
     <div id="articles_list">
