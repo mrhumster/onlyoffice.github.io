@@ -185,44 +185,36 @@ function debounce(func, wait, immediate) {
 
         const addBibBtnClickHandler = async () => {
             await getArticlesToString('gost-r-7-0-5-2008', 'ru')
-            window.Asc.plugin.executeMethod("AddContentControl", [1, {
-                "Id": getDocId(),
-                "Tag": "bibliography",
-                "Lock": 3
-            }]);
-            window.Asc.plugin.executeMethod ("GetAllContentControls", null, function (data) {
-                for (var i = 0; i < data.length; i++) {
-                    console.log(data[i].internalId);
-                    if (data[i].Tag === 'bibliography') {
-                        this.Asc.plugin.executeMethod ("SelectContentControl", [data[i].InternalId]);
-                        console.log(data[i].InternalId)
-                        const cc = [{
-                            "Props": {
-                                "Id": getDocId(),
-                                "Lock": 3,
-                                "Tag": "bibliography",
-                                "InternalId": data[i].internalId
-                            },
-                            "Script":
-                                "const cites = JSON.parse(localStorage.getItem('pal-articles-cites'));" +
-                                "const articlesStrings = cites['articles'];" +
-                                "const bg = Api.CreateParagraph();" +
-                                "Api.GetDocument().InsertContent([bg]);" +
-                                "const title = Api.CreateParagraph();" +
-                                "title.AddText('Библиография');" +
-                                "bg.InsertParagraph(title, 'before', true);" +
-                                "articlesStrings.map((cite) => {" +
-                                "   const oParagraph = Api.CreateParagraph();" +
-                                "   oParagraph.AddText(cite); " +
-                                "   bg.InsertParagraph(oParagraph, 'before', true);" +
-                                "});"
-
-                        }]
-                        this.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [cc]);
-                        break;
-                    }
-                }
-            });
+            const documentId = getDocId();
+            const onAddContentControl = (_cc) => {
+                // Колбэк выполняемый при добавлении элемента управлением содержимым
+                localStorage.setItem('pal-bibliography-id', _cc.InternalId)
+                const arrDocuments = [{
+                    "Props": {
+                        "InternalId": _cc.InternalId
+                    },
+                    "Script":
+                        "const cites = JSON.parse(localStorage.getItem('pal-articles-cites'));" +
+                        "const oDocument = Api.GetDocument();" +
+                        "const articlesStrings = cites['articles'];" +
+                        "const bg = Api.CreateParagraph();" +
+                        "oDocument.InsertContent([bg]);" +
+                        "const title = Api.CreateParagraph();" +
+                        "title.SetJc('center');" +
+                        "const oTextPr = oDocument.GetDefaultTextPr();" +
+                        "oTextPr.SetBold(true);" +
+                        "title.AddText('Библиография');" +
+                        "bg.InsertParagraph(title, 'before', true);" +
+                        "oTextPr.SetBold(false);" +
+                        "articlesStrings.map((cite) => {" +
+                        "   const oParagraph = Api.CreateParagraph();" +
+                        "   oParagraph.AddText(cite); " +
+                        "   bg.InsertParagraph(oParagraph, 'before', true);" +
+                        "});"
+                }]
+                this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
+            }
+            this.executeMethod('AddContentControl', [1, {"Id": documentId, "Tag": "bibliography", "Lock": 3}], onAddContentControl);
         }
 
         const updateArticleList = async () => {
