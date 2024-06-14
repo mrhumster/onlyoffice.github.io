@@ -65,7 +65,7 @@ const getDocumentFromLocalStorage = () => {
 }
 
 const saveArticleStringsToLocalStorage = (lst) => {
-    return localStorage.setItem(localStorageItemsKey.articlesCites, JSON.stringify({articles: lst}))
+    return localStorage.setItem(localStorageItemsKey.articlesCites, JSON.stringify(lst))
 }
 
 const getArticleStringsFromLocalStorage = () => {
@@ -136,17 +136,16 @@ function debounce(func, wait, immediate) {
             return data
         }
 
-        const getArticlesToString = async (fmt, locale) => {
+        const getBiblioByDocumentId = async (fmt, locale) => {
             const document = getDocumentFromLocalStorage();
-            const response = await fetch(`${BASE_URI}/articles/str?${new URLSearchParams({fmt: fmt, locale:  locale})}`,
-                {
-                    method: "POST",
-                    headers: headers,
-                    body: JSON.stringify(document.articles)
-                }
-            );
+            const response = await fetch(`${BASE_URI}/documents/${docId}/str?${new URLSearchParams({
+                    fmt: fmt,
+                    locale: locale
+                })}`,
+                {headers: headers});
+
             const data = await response.json();
-            saveArticleStringsToLocalStorage(data)
+            saveArticleStringsToLocalStorage(data.bibliography)
             return data
         }
 
@@ -176,22 +175,61 @@ function debounce(func, wait, immediate) {
 
         const removeArticleFromDocumentClickHandler = async (e) => {
             // TODO: Удаление ссылок из документов
-            const article_id = e.target.getAttribute('data-article-id')
-            const articles = getDocumentFromLocalStorage().articles.filter((item) => item !== article_id)
-            const document_id = getDocumentFromLocalStorage().id
-            const updated_doc = await updateDocumentById(document_id, articles)
+            const article_id = e.target.getAttribute('data-article-id');
+            const articles = getDocumentFromLocalStorage().articles.filter((item) => item !== article_id);
+            const document_id = getDocumentFromLocalStorage().id;
+            const updated_doc = await updateDocumentById(document_id, articles);
             await removeArticleFromList(article_id);
         }
 
+        const onAddCiteCC = async (_cc) => {
+            localStorage.setItem('_cc', JSON.stringify(_cc));
+            console.log(_cc)
+            const arrDocuments = [{
+                "Props": {
+                    "InternalId": _cc.InternalId,
+                    "Inline": true
+                },
+                "Script":
+                    "const _cc = JSON.parse(localStorage.getItem('_cc'));" +
+                    "const index = _cc.Tag;" +
+                    "const oDocument = Api.GetDocument();" +
+                    "let cite = Api.CreateParagraph();" +
+                    "cite.AddText('ddd');" +
+                    "oDocument.InsertContent([cite]);"
+
+            }]
+            this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
+            this.executeMethod("PasteHtml", [`<span id="${_cc.Tag}">${_cc.Tag}</span>`])
+        }
+
+        const pastInTextButtonClickHandler = async (e) => {
+            const article_id = e.target.getAttribute('data-article-id');
+            const index = getArticleStringsFromLocalStorage()[article_id]['index']
+            Asc.scope._article_id = article_id;
+            Asc.scope._index = index
+            // this.executeMethod('AddContentControl', [2, {"Id": article_id, "Tag": index, "Lock": 3}], onAddCiteCC);
+            //this.executeMethod("PasteHtml", [`<span id=${article_id}>[${index}]</span>`]);
+            this.callCommand(function () {
+                    let oDocument = Api.GetDocument();
+                    let oParagraph = Api.CreateParagraph();
+                    oParagraph.AddText(`[${Asc.scope._index}]`);
+                    oParagraph.AddBookmarkCrossRef("aboveBelow", Asc.scope._article_id);
+                    oDocument.InsertContent([oParagraph]);
+                },
+
+                false);
+        }
+
         const addBibBtnClickHandler = async () => {
-            await getArticlesToString('gost-r-7-0-5-2008', 'ru')
+            await getBiblioByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
             const documentId = getDocId();
             const onAddContentControl = (_cc) => {
-                // Колбэк выполняемый при добавлении элемента управлением содержимым
                 localStorage.setItem('pal-bibliography-id', _cc.InternalId)
                 const arrDocuments = [{
                     "Props": {
-                        "InternalId": _cc.InternalId
+                        "InternalId": _cc.InternalId,
+                        "Appearance": 2
                     },
                     "Script":
                         "const cites = JSON.parse(localStorage.getItem('pal-articles-cites'));" +
@@ -206,15 +244,35 @@ function debounce(func, wait, immediate) {
                         "title.AddText('Библиография');" +
                         "bg.InsertParagraph(title, 'before', true);" +
                         "oTextPr.SetBold(false);" +
-                        "articlesStrings.map((cite) => {" +
+                        "const keys = Object.keys(cites);" +
+                        "keys.map((key) => {" +
+                        "   const cite = cites[key];" +
                         "   const oParagraph = Api.CreateParagraph();" +
-                        "   oParagraph.AddText(cite); " +
+                        "   oParagraph.AddText(cite.refer); " +
                         "   bg.InsertParagraph(oParagraph, 'before', true);" +
+                        "   const oRange = oParagraph.GetRange(0,3);" +
+                        "   oRange.AddBookmark(key);" +
                         "});"
                 }]
-                this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
+                this.executeMethod("InsertAndReplaceContentControls", [arrDocuments], (_re) => {console.log(_re)});
             }
-            this.executeMethod('AddContentControl', [1, {"Id": documentId, "Tag": "bibliography", "Lock": 3}], onAddContentControl);
+            const onMoveCursorToEnd = () => {
+                this.executeMethod('AddContentControl', [1, {
+                    "Id": documentId,
+                    "Tag": "bibliography",
+                    "Lock": 3,
+                    "Alias": "Библиография",
+                    "Appearance": 2
+                }], onAddContentControl);
+            }
+            this.callCommand(() => {
+                const oDocument = Api.GetDocument();
+                const oParagpraph = oDocument.GetElement(oDocument.GetElementsCount() - 1)
+                oParagpraph.AddPageBreak();
+            })
+            this.executeMethod("MoveCursorToEnd", [true], onMoveCursorToEnd);
+
+
         }
 
         const updateArticleList = async () => {
@@ -222,12 +280,12 @@ function debounce(func, wait, immediate) {
             if (doc) {
                 elements.articleList.innerHTML = null;
                 const title = document.createElement('h2');
-                title.style.gridColumn = "span 2 / span 2";
+                title.style.gridColumn = "span 3 / span 3";
                 title.style.textAlign = "center";
                 title.appendChild(document.createTextNode('Библиография'));
                 const btnCont = document.createElement('div');
                 btnCont.classList.add('buttons_container');
-                btnCont.style.gridColumn = "span 2 / span 2";
+                btnCont.style.gridColumn = "span 3 / span 3";
                 const addBibBtn = document.createElement('button');
                 addBibBtn.appendChild(document.createTextNode('Вставить библиографию'));
                 addBibBtn.classList.add('btn-text-default');
@@ -248,13 +306,22 @@ function debounce(func, wait, immediate) {
                             articleTitle.setAttribute('data-article-id', article['id'])
                             articleTitle.appendChild(document.createTextNode(article['title']))
 
+                            const pastInTextButton = document.createElement('button');
+                            pastInTextButton.classList.add("btn-text-default");
+                            pastInTextButton.setAttribute('data-article-id', article['id']);
+                            pastInTextButton.appendChild(document.createTextNode('⬆'));
+                            pastInTextButton.addEventListener('click', pastInTextButtonClickHandler)
+                            pastInTextButton.title = 'Вставить в документ ссылку';
+
                             const removeBtn = document.createElement('button');
                             removeBtn.classList.add("btn-text-default");
-                            removeBtn.setAttribute('data-article-id', article['id'])
+                            removeBtn.setAttribute('data-article-id', article['id']);
                             removeBtn.appendChild(document.createTextNode('🚫'));
-                            removeBtn.addEventListener('click', removeArticleFromDocumentClickHandler)
+                            removeBtn.addEventListener('click', removeArticleFromDocumentClickHandler);
+                            removeBtn.title = 'Удалить из библиографии';
 
-                            elements.articleList.appendChild(articleTitle)
+                            elements.articleList.appendChild(articleTitle);
+                            elements.articleList.appendChild(pastInTextButton);
                             elements.articleList.appendChild(removeBtn);
                         })
                         .catch((error) => {
@@ -500,8 +567,8 @@ function debounce(func, wait, immediate) {
         elements.btnArticleList.onclick = showList;
         elements.btnSearch.onclick = showSearch;
     };
-    window.Asc.plugin.button = function (id) {
-        this.executeCommand("close", "");
+    window.Asc.plugin.button = (id) => {
+        if (id === -1) window.Asc.plugin.executeCommand("close", "");
     };
 
 })(window, undefined);
