@@ -183,42 +183,26 @@ function debounce(func, wait, immediate) {
         }
 
         const onAddCiteCC = async (_cc) => {
-            localStorage.setItem('_cc', JSON.stringify(_cc));
-            console.log(_cc)
             const arrDocuments = [{
                 "Props": {
                     "InternalId": _cc.InternalId,
                     "Inline": true
                 },
-                "Script":
-                    "const _cc = JSON.parse(localStorage.getItem('_cc'));" +
-                    "const index = _cc.Tag;" +
-                    "const oDocument = Api.GetDocument();" +
-                    "let cite = Api.CreateParagraph();" +
-                    "cite.AddText('ddd');" +
-                    "oDocument.InsertContent([cite]);"
+                "Script": `
+                    const cite = Api.CreateParagraph();
+                    cite.AddText("[${_cc.Tag}]");
+                    Api.GetDocument().InsertContent([cite], true, {KeepTextOnly: true});
+                    cite.AddBookmarkCrossRef('text', "${_cc.Id}", true);
+                    `
 
             }]
             this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
-            this.executeMethod("PasteHtml", [`<span id="${_cc.Tag}">${_cc.Tag}</span>`])
         }
 
         const pastInTextButtonClickHandler = async (e) => {
             const article_id = e.target.getAttribute('data-article-id');
             const index = getArticleStringsFromLocalStorage()[article_id]['index']
-            Asc.scope._article_id = article_id;
-            Asc.scope._index = index
-            // this.executeMethod('AddContentControl', [2, {"Id": article_id, "Tag": index, "Lock": 3}], onAddCiteCC);
-            //this.executeMethod("PasteHtml", [`<span id=${article_id}>[${index}]</span>`]);
-            this.callCommand(function () {
-                    let oDocument = Api.GetDocument();
-                    let oParagraph = Api.CreateParagraph();
-                    oParagraph.AddText(`[${Asc.scope._index}]`);
-                    oParagraph.AddBookmarkCrossRef("aboveBelow", Asc.scope._article_id);
-                    oDocument.InsertContent([oParagraph]);
-                },
-
-                false);
+            this.executeMethod('AddContentControl', [2, {"Id": article_id, "Tag": index, "Lock": 3}], onAddCiteCC);
         }
 
         const addBibBtnClickHandler = async () => {
@@ -231,28 +215,29 @@ function debounce(func, wait, immediate) {
                         "InternalId": _cc.InternalId,
                         "Appearance": 2
                     },
-                    "Script":
-                        "const cites = JSON.parse(localStorage.getItem('pal-articles-cites'));" +
-                        "const oDocument = Api.GetDocument();" +
-                        "const articlesStrings = cites['articles'];" +
-                        "const bg = Api.CreateParagraph();" +
-                        "oDocument.InsertContent([bg]);" +
-                        "const title = Api.CreateParagraph();" +
-                        "title.SetJc('center');" +
-                        "const oTextPr = oDocument.GetDefaultTextPr();" +
-                        "oTextPr.SetBold(true);" +
-                        "title.AddText('Библиография');" +
-                        "bg.InsertParagraph(title, 'before', true);" +
-                        "oTextPr.SetBold(false);" +
-                        "const keys = Object.keys(cites);" +
-                        "keys.map((key) => {" +
-                        "   const cite = cites[key];" +
-                        "   const oParagraph = Api.CreateParagraph();" +
-                        "   oParagraph.AddText(cite.refer); " +
-                        "   bg.InsertParagraph(oParagraph, 'before', true);" +
-                        "   const oRange = oParagraph.GetRange(0,3);" +
-                        "   oRange.AddBookmark(key);" +
-                        "});"
+                    "Script": `
+                        const cites = JSON.parse(localStorage.getItem('pal-articles-cites'));
+                        const oDocument = Api.GetDocument();
+                        const articlesStrings = cites['articles'];
+                        const bg = Api.CreateParagraph();
+                        oDocument.InsertContent([bg]);
+                        const title = Api.CreateParagraph();
+                        title.SetJc('center');
+                        const oTextPr = oDocument.GetDefaultTextPr();
+                        oTextPr.SetBold(true);
+                        title.AddText('Библиография');
+                        bg.InsertParagraph(title, 'before', true);
+                        oTextPr.SetBold(false);
+                        const keys = Object.keys(cites);
+                        keys.map((key) => {
+                           const cite = cites[key];
+                           const oParagraph = Api.CreateParagraph();
+                           oParagraph.AddText(cite.refer);
+                           bg.InsertParagraph(oParagraph, 'before', true);
+                           const oRange = oParagraph.GetRange(0,3);
+                           oRange.AddBookmark(key);
+                        });
+                        `
                 }]
                 this.executeMethod("InsertAndReplaceContentControls", [arrDocuments], (_re) => {console.log(_re)});
             }
@@ -370,67 +355,6 @@ function debounce(func, wait, immediate) {
                 .then((response) => {
                     updateArticleList().then(() => console.log('Updated'));
                 })
-            /*
-            getArticleStringById(article_id)
-                .then((resp) => {
-                    const link = resp['link']
-                    Asc.scope.article_id = article_id;
-                    Asc.scope.link = link
-                    window.Asc.plugin.callCommand(() => {
-                        const createBibliography = (oDocument) => {
-                            const oTocPr = {
-                                "ShowPageNums": true,
-                                "RightAlgn": true,
-                                "LeaderType": "dot",
-                                "FormatAsLinks": true,
-                                "BuildFrom": {"OutlineLvls": 9},
-                                "TocStyle": "standard"
-                            };
-
-                            oDocument.AddTableOfContents(oTocPr)
-                        }
-                        const createCrossRef = (bookmarkName) => {
-                            const currentSelect = oDocument.GetRangeBySelect();
-                            const oParagraph = currentSelect.GetParagraph(0)
-                            oParagraph.AddBookmarkCrossRef("aboveBelow", bookmarkName);
-                        }
-                        const addArticleAndAddBookmark = (oParagraph) => {
-                            const oRun = oParagraph.AddText(Asc.scope.link);
-                            const oRange = oRun.GetRange(0, 3);
-                            oRange.AddBookmark(Asc.scope.article_id)
-                        }
-                        const oDocument = Api.GetDocument();
-                        const oParagraphs = oDocument.GetAllParagraphs();
-                        let isToxFind = false;
-                        oParagraphs.map((oParagraph) => {
-                            const oRanges = oParagraph.Search("Библиография", false)
-                            if (oRanges[0]) {
-                                // Найден Список литературы
-                                isToxFind = true;
-                                oParagraph.AddLineBreak();
-                                addArticleAndAddBookmark(oParagraph)
-                                createCrossRef(Asc.scope.article_id);
-                                createBibliography(oDocument);
-                            }
-                        });
-                        if (!isToxFind) {
-                            const oParagraph = Api.CreateParagraph()
-                            oParagraph.SetSpacingLine(240)
-                            oParagraph.AddPageBreak();
-                            oDocument.Push(oParagraph);
-                            oParagraph.AddText("Библиография")
-                            const header = oParagraph.GetRange(0, 13)
-                            header.SetBold();
-                            header.SetFontSize(16);
-                            header.AddBookmark('bibliography');
-                            oParagraph.AddLineBreak();
-                            addArticleAndAddBookmark(oParagraph)
-                            createCrossRef(Asc.scope.article_id);
-                        }
-                    }, false);
-                })
-
-             */
         }
 
         const createListResult = (response) => {
