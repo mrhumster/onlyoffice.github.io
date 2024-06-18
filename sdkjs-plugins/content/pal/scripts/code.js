@@ -5,7 +5,7 @@ const localStorageItemsKey = {
     articlesCites: 'pal-articles-cites'
 }
 
-const BASE_URI = 'https://base/api'
+const BASE_URI = 'https://pal.test.vniigaz.local/api'
 
 const truncateString = (string, length = 20) => {
     if (string.length > length)
@@ -37,7 +37,11 @@ const delApiKey = () => {
     return localStorage.removeItem(localStorageItemsKey.apiKey)
 }
 
-const getDocId = () => {
+const createDocument = () => {
+
+}
+
+const getDocId = async () => {
     return localStorage.getItem(localStorageItemsKey.docId)
 }
 
@@ -187,12 +191,18 @@ function debounce(func, wait, immediate) {
                 "Props": {
                     "InternalId": _cc.InternalId,
                     "Inline": true
-                },
+                }, // //cite.AddText("[${_cc.Tag}]");
                 "Script": `
                     const cite = Api.CreateParagraph();
-                    cite.AddText("[${_cc.Tag}]");
+                    const bookmarks = Api.GetDocument().GetAllBookmarksNames();
+                    console.log('All bookmarks', bookmarks);
+                    console.log('I need to add: ${_cc.Id}');
+                    console.log(bookmarks[0] === "${_cc.Id}");
+                    cite.AddText("[");
+                    const isBookmarkAdded = cite.AddBookmarkCrossRef('text', "${_cc.Id}", true);
+                    console.log('isBookmarkAdded', isBookmarkAdded);
+                    cite.AddText("]");
                     Api.GetDocument().InsertContent([cite], true, {KeepTextOnly: true});
-                    cite.AddBookmarkCrossRef('text', "${_cc.Id}", true);
                     `
 
             }]
@@ -231,10 +241,11 @@ function debounce(func, wait, immediate) {
                         const keys = Object.keys(cites);
                         keys.map((key) => {
                            const cite = cites[key];
+                           const end = cite.index.toString().length;
                            const oParagraph = Api.CreateParagraph();
                            oParagraph.AddText(cite.refer);
                            bg.InsertParagraph(oParagraph, 'before', true);
-                           const oRange = oParagraph.GetRange(0,3);
+                           const oRange = oParagraph.GetRange(0,end);
                            oRange.AddBookmark(key);
                         });
                         `
