@@ -116,7 +116,6 @@ function debounce(func, wait, immediate) {
 
 (function (window, undefined) {
     window.Asc.plugin.init = function () {
-
         const elements = {
             searchInput: document.getElementById('search_input'),
             search: document.getElementById('search'),
@@ -176,19 +175,12 @@ function debounce(func, wait, immediate) {
             return await response.json()
         }
 
-
         const handleSubmit = (e) => {
             const api_key = e.target.elements['api_key'].value;
             localStorage.setItem("x-api-key", api_key);
             elements.authForm.style.display = 'none';
             elements.articleList.style.display = 'none';
             elements.search.style.display = 'none';
-        }
-
-        const removeArticleFromList = async (article_id) => {
-            const articles_list = document.querySelectorAll(`[data-article-id='${article_id}']`)
-            const article_array = [...articles_list]
-            article_array.forEach(div => div.remove())
         }
 
         const removeArticleFromDocumentClickHandler = async (e) => {
@@ -202,29 +194,6 @@ function debounce(func, wait, immediate) {
                     updateBibliographyInDocument()
                         .then(() => console.log('Bibliography updated in document'));
                 })
-        }
-
-        const onAddCiteCC = async (_cc) => {
-            const arrDocuments = [{
-                "Props": {
-                    "InternalId": _cc.InternalId,
-                    "Inline": true
-                }, // //cite.AddText("[${_cc.Tag}]");
-                "Script": `
-                    const cite = Api.CreateParagraph();
-                    const bookmarks = Api.GetDocument().GetAllBookmarksNames();
-                    console.log('All bookmarks', bookmarks);
-                    console.log('I need to add: ${_cc.Id}');
-                    console.log(bookmarks[0] === "${_cc.Id}");
-                    cite.AddText("[");
-                    const isBookmarkAdded = cite.AddBookmarkCrossRef('text', "${_cc.Id}", true);
-                    console.log('isBookmarkAdded', isBookmarkAdded);
-                    cite.AddText("]");
-                    Api.GetDocument().InsertContent([cite], true, {KeepTextOnly: true});
-                    `
-
-            }]
-            this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
         }
 
         const pastInTextButtonClickHandler = async (e) => {
@@ -266,7 +235,6 @@ function debounce(func, wait, immediate) {
                 for (let i = 0; i < data.length; i++) {
                     if (data[i].Tag !== 'bibliography') {
                         if (Asc.scope.diffWithoutNotChanged.hasOwnProperty(data[i].Tag)) {
-                            // TODO: Insert And replase
                             const arrDocuments = [{
                                 "Props": {
                                     "InternalId": data[i].InternalId,
@@ -419,7 +387,6 @@ function debounce(func, wait, immediate) {
         }
 
         const getSearchResult = async (query) => {
-            const key = localStorage.getItem("x-api-key");
             const response = await fetch(`${BASE_URI}/search?` + new URLSearchParams({query: query}),
                 {headers: headers});
             return await response.json();
