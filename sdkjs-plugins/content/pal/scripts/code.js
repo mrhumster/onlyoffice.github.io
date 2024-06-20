@@ -2,7 +2,8 @@ const localStorageItemsKey = {
     docId: 'pal-document-id',
     palDoc: 'pal-doc',
     apiKey: 'x-api-key',
-    articlesCites: 'pal-articles-cites'
+    articlesCites: 'pal-articles-cites',
+    bibliographyContentControl: 'pal-bib-internal-id'
 }
 
 const BASE_URI = 'https://pal.test.vniigaz.local/api'
@@ -71,6 +72,14 @@ const saveArticleStringsToLocalStorage = (lst) => {
 const getArticleStringsFromLocalStorage = () => {
     const cites = localStorage.getItem(localStorageItemsKey.articlesCites)
     return JSON.parse(cites)
+}
+
+const saveContentControlBibliographyInternalIdToLocalStorage = (value) => {
+    return localStorage.setItem(localStorageItemsKey.bibliographyContentControl, value)
+}
+
+const getContentControlBibliographyInternalIdFromLocalStorage = () => {
+    return localStorage.getItem(localStorageItemsKey.bibliographyContentControl)
 }
 
 function debounce(func, wait, immediate) {
@@ -219,7 +228,7 @@ function debounce(func, wait, immediate) {
             await getBiblioByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
             const documentId = getDocId();
             const onAddContentControl = (_cc) => {
-                localStorage.setItem('pal-bibliography-id', _cc.InternalId)
+                saveContentControlBibliographyInternalIdToLocalStorage(_cc.InternalId)
                 const arrDocuments = [{
                     "Props": {
                         "InternalId": _cc.InternalId,
@@ -227,7 +236,7 @@ function debounce(func, wait, immediate) {
                         "Appearance": 2
                     },
                     "Script": `
-                        const cites = JSON.parse(localStorage.getItem('pal-articles-cites'));
+                        const cites = JSON.parse(localStorage.getItem('${localStorageItemsKey.articlesCites}'));
                         const oDocument = Api.GetDocument();
                         const articlesStrings = cites['articles'];
                         const bg = Api.CreateParagraph();
@@ -356,15 +365,55 @@ function debounce(func, wait, immediate) {
             return await response.json();
         }
 
+        const updateBibliographyInDocument = async () => {
+            const contentControlInternalId = getContentControlBibliographyInternalIdFromLocalStorage();
+            if (!contentControlInternalId) throw 'Not found internal id for bibliography content control in local storage';
+            const documentId = getDocId();
+            if (!documentId) throw 'Not found document id in local storage'
+            await getBiblioByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
+            const arrDocuments = [{
+                "Props": {
+                    "InternalId": contentControlInternalId,
+                    "Id": documentId,
+                    "Appearance": 2
+                },
+                "Script": `
+                        const cites = JSON.parse(localStorage.getItem('${localStorageItemsKey.articlesCites}'));
+                        const oDocument = Api.GetDocument();
+                        const articlesStrings = cites['articles'];
+                        const bg = Api.CreateParagraph();
+                        oDocument.InsertContent([bg]);
+                        const title = Api.CreateParagraph();
+                        title.SetJc('center');
+                        const oTextPr = oDocument.GetDefaultTextPr();
+                        oTextPr.SetBold(true);
+                        title.AddText('Библиография');
+                        bg.InsertParagraph(title, 'before', true);
+                        oTextPr.SetBold(false);
+                        const keys = Object.keys(cites);
+                        keys.map((key) => {
+                           const cite = cites[key];
+                           const end = cite.index.toString().length;
+                           const oParagraph = Api.CreateParagraph();
+                           oParagraph.AddText(cite.refer);
+                           bg.InsertParagraph(oParagraph, 'before', true);
+                           const oRange = oParagraph.GetRange(0,end);
+                           oRange.AddBookmark(key);
+                        });
+                        `
+            }]
+            this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
+        }
 
         const handleSearchResultItemClick = async (e) => {
             const article_id = e.target.getAttribute('data-article-id')
             const {id, articles} = getDocumentFromLocalStorage();
             updateDocumentById(id, [...articles, article_id])
                 .then((response) => {
-                    updateArticleList().then(() => {
-                        console.log('Bibliography updated on backend')
-                    });
+                    updateArticleList()
+                        .then(() => console.log('Bibliography updated in backend'));
+                    updateBibliographyInDocument()
+                        .then(() => console.log('Bibliography updated in document'));
                 })
         }
 
@@ -471,9 +520,10 @@ function debounce(func, wait, immediate) {
                 for (let i=0; i < data.length; i++) {
                     if (founded) break
                     if (data[i].Tag === 'bibliography') {
-                        console.log('Founded document id: ', data[i].Id)
+                        console.log('Founded document id: ', data[i].Id);
                         founded = true;
-                        setDocId(data[i].Id)
+                        setDocId(data[i].Id);
+                        saveContentControlBibliographyInternalIdToLocalStorage(data[i].InternalId);
                         let documentId = getDocId();
                         getDocumentById(documentId)
                             .then((data) => {
