@@ -65,13 +65,29 @@ const getDocumentFromLocalStorage = () => {
     return JSON.parse(pal_document)
 }
 
-const saveArticleStringsToLocalStorage = (lst) => {
-    return localStorage.setItem(localStorageItemsKey.articlesCites, JSON.stringify(lst))
-}
-
 const getArticleStringsFromLocalStorage = () => {
     const cites = localStorage.getItem(localStorageItemsKey.articlesCites)
     return JSON.parse(cites)
+}
+
+const saveArticleStringsToLocalStorageAndReturnDifference = (lst) => {
+    const oldArticleList = getArticleStringsFromLocalStorage();
+    const indexDifferences = {}
+    for (let article_id in oldArticleList) {
+        indexDifferences[article_id] = {
+            "was": oldArticleList.hasOwnProperty(article_id) ? oldArticleList[article_id].index : null,
+            "now": lst.hasOwnProperty(article_id) ? lst[article_id].index : null
+        }
+    }
+    for (let article_id in lst) {
+        if (!indexDifferences.hasOwnProperty(article_id))
+            indexDifferences[article_id] = {
+                "was": oldArticleList.hasOwnProperty(article_id) ? oldArticleList[article_id].index : null,
+                "now": lst.hasOwnProperty(article_id) ? lst[article_id].index : null
+            }
+    }
+    localStorage.setItem(localStorageItemsKey.articlesCites, JSON.stringify(lst));
+    return indexDifferences
 }
 
 const saveContentControlBibliographyInternalIdToLocalStorage = (value) => {
@@ -157,9 +173,7 @@ function debounce(func, wait, immediate) {
                 })}`,
                 {headers: headers});
 
-            const data = await response.json();
-            saveArticleStringsToLocalStorage(data.bibliography)
-            return data
+            return await response.json()
         }
 
 
@@ -178,12 +192,16 @@ function debounce(func, wait, immediate) {
         }
 
         const removeArticleFromDocumentClickHandler = async (e) => {
-            // TODO: Удаление ссылок из документов
             const article_id = e.target.getAttribute('data-article-id');
             const articles = getDocumentFromLocalStorage().articles.filter((item) => item !== article_id);
             const document_id = getDocumentFromLocalStorage().id;
-            const updated_doc = await updateDocumentById(document_id, articles);
-            await removeArticleFromList(article_id);
+            await updateDocumentById(document_id, articles)
+                .then((response) => {
+                    updateArticleList()
+                        .then(() => console.log('Bibliography updated in backend'));
+                    updateBibliographyInDocument()
+                        .then(() => console.log('Bibliography updated in document'));
+                })
         }
 
         const onAddCiteCC = async (_cc) => {
@@ -214,18 +232,65 @@ function debounce(func, wait, immediate) {
             const index = getArticleStringsFromLocalStorage()[article_id]['index']
             Asc.scope.bookmark_id = article_id
             Asc.scope.bookmark_idx = index
-            this.callCommand(() => {
-                const oDocument = Api.GetDocument();
-                const oParagraph = Api.CreateParagraph()
-                oParagraph.AddText(`[${Asc.scope.bookmark_idx.toString()}]`);
-                oDocument.InsertContent([oParagraph], true);
-                //oParagraph.AddBookmarkCrossRef("text", Asc.scope.bookmark_id, true)
+
+            this.executeMethod('AddContentControl', [2, {
+                "Id": Asc.scope.bookmark_idx,
+                "Tag": Asc.scope.bookmark_id,
+                "Lock": 3,
+                "Appearance": 2
+            }], (_cc) => {
+                const arrDocuments = [{
+                    "Props": {
+                        "InternalId": _cc.InternalId,
+                        "Inline": true
+                    },
+                    "Script": `
+                        const cite = Api.CreateParagraph();
+                        cite.AddText("[${_cc.Id}]");
+                        Api.GetDocument().InsertContent([cite], true, {KeepTextOnly: true});
+                    `
+                }]
+                this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
             });
-            // this.executeMethod('AddContentControl', [2, {"Id": article_id, "Tag": index, "Lock": 3}], onAddCiteCC);
+        }
+
+        const updateReferenceInDocument = (diff) => {
+            const diffWithoutNotChanged = {}
+            for (let key in diff) {
+                if (diff[key].was !== diff[key].now) {
+                    diffWithoutNotChanged[key] = diff[key]
+                }
+            }
+            Asc.scope.diffWithoutNotChanged = diffWithoutNotChanged
+            this.executeMethod("GetAllContentControls", null, (data) => {
+                for (let i = 0; i < data.length; i++) {
+                    if (data[i].Tag !== 'bibliography') {
+                        if (Asc.scope.diffWithoutNotChanged.hasOwnProperty(data[i].Tag)) {
+                            // TODO: Insert And replase
+                            const arrDocuments = [{
+                                "Props": {
+                                    "InternalId": data[i].InternalId,
+                                    "Inline": true
+                                },
+                                "Script": `
+                                    const cite = Api.CreateParagraph();
+                                    cite.AddText("[${Asc.scope.diffWithoutNotChanged[data[i].Tag].now}]");
+                                    Api.GetDocument().InsertContent([cite], true, {KeepTextOnly: true});
+                                `
+                            }]
+                            this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
+                        }
+                    }
+                }
+            })
         }
 
         const addBibBtnClickHandler = async () => {
             await getBiblioByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
+                .then((data) => {
+                    const diff = saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography)
+                    updateReferenceInDocument(diff);
+                })
             const documentId = getDocId();
             const onAddContentControl = (_cc) => {
                 saveContentControlBibliographyInternalIdToLocalStorage(_cc.InternalId)
@@ -260,7 +325,9 @@ function debounce(func, wait, immediate) {
                         });
                         `
                 }]
-                this.executeMethod("InsertAndReplaceContentControls", [arrDocuments], (_re) => {console.log(_re)});
+                this.executeMethod("InsertAndReplaceContentControls", [arrDocuments], (_re) => {
+                    console.log(_re)
+                });
             }
             const onMoveCursorToEnd = () => {
                 this.executeMethod('AddContentControl', [1, {
@@ -359,7 +426,6 @@ function debounce(func, wait, immediate) {
         }
 
         const getArticleById = async (article_id) => {
-            // const key = localStorage.getItem("x-api-key");
             const response = await fetch(`${BASE_URI}/articles/${article_id}`,
                 {headers: headers});
             return await response.json();
@@ -371,6 +437,10 @@ function debounce(func, wait, immediate) {
             const documentId = getDocId();
             if (!documentId) throw 'Not found document id in local storage'
             await getBiblioByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
+                .then((data) => {
+                    const diff = saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography)
+                    updateReferenceInDocument(diff);
+                })
             const arrDocuments = [{
                 "Props": {
                     "InternalId": contentControlInternalId,
@@ -517,7 +587,7 @@ function debounce(func, wait, immediate) {
         const searchBibliographyInDocument = () => {
             this.executeMethod("GetAllContentControls", null, (data) => {
                 let founded = false;
-                for (let i=0; i < data.length; i++) {
+                for (let i = 0; i < data.length; i++) {
                     if (founded) break
                     if (data[i].Tag === 'bibliography') {
                         console.log('Founded document id: ', data[i].Id);
@@ -535,7 +605,9 @@ function debounce(func, wait, immediate) {
                 }
                 if (!founded) {
                     createNewDocumentInPal()
-                        .then((data) => {console.info('New document created on backend', data)})
+                        .then((data) => {
+                            console.info('New document created on backend', data)
+                        })
                         .catch((error) => console.error(error))
                 }
             });
