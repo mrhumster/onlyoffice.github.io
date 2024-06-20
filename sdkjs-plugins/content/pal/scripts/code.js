@@ -37,11 +37,7 @@ const delApiKey = () => {
     return localStorage.removeItem(localStorageItemsKey.apiKey)
 }
 
-const createDocument = () => {
-
-}
-
-const getDocId = async () => {
+const getDocId = () => {
     return localStorage.getItem(localStorageItemsKey.docId)
 }
 
@@ -95,13 +91,17 @@ function debounce(func, wait, immediate) {
 
 (function (window, undefined) {
     window.Asc.plugin.init = function () {
-        const readDocId = () => {
-            const docId = localStorage.getItem(localStorageItemsKey.docId)
-            if (docId) return docId
-            else return false
-        }
 
-        const docId = readDocId();
+        const elements = {
+            searchInput: document.getElementById('search_input'),
+            search: document.getElementById('search'),
+            searchResult: document.getElementById('search_result'),
+            authForm: document.getElementById('auth'),
+            btnRemoveKey: document.getElementById('btn_remove_key'),
+            btnArticleList: document.getElementById('btn_article_list'),
+            btnSearch: document.getElementById('btn_search'),
+            articleList: document.getElementById('articles_list')
+        }
 
         const createNewDocumentInPal = async () => {
             const key = localStorage.getItem(localStorageItemsKey.apiKey);
@@ -142,7 +142,7 @@ function debounce(func, wait, immediate) {
 
         const getBiblioByDocumentId = async (fmt, locale) => {
             const document = getDocumentFromLocalStorage();
-            const response = await fetch(`${BASE_URI}/documents/${docId}/str?${new URLSearchParams({
+            const response = await fetch(`${BASE_URI}/documents/${document.id}/str?${new URLSearchParams({
                     fmt: fmt,
                     locale: locale
                 })}`,
@@ -153,16 +153,7 @@ function debounce(func, wait, immediate) {
             return data
         }
 
-        const elements = {
-            searchInput: document.getElementById('search_input'),
-            search: document.getElementById('search'),
-            searchResult: document.getElementById('search_result'),
-            authForm: document.getElementById('auth'),
-            btnRemoveKey: document.getElementById('btn_remove_key'),
-            btnArticleList: document.getElementById('btn_article_list'),
-            btnSearch: document.getElementById('btn_search'),
-            articleList: document.getElementById('articles_list')
-        }
+
         const handleSubmit = (e) => {
             const api_key = e.target.elements['api_key'].value;
             localStorage.setItem("x-api-key", api_key);
@@ -212,7 +203,16 @@ function debounce(func, wait, immediate) {
         const pastInTextButtonClickHandler = async (e) => {
             const article_id = e.target.getAttribute('data-article-id');
             const index = getArticleStringsFromLocalStorage()[article_id]['index']
-            this.executeMethod('AddContentControl', [2, {"Id": article_id, "Tag": index, "Lock": 3}], onAddCiteCC);
+            Asc.scope.bookmark_id = article_id
+            Asc.scope.bookmark_idx = index
+            this.callCommand(() => {
+                const oDocument = Api.GetDocument();
+                const oParagraph = Api.CreateParagraph()
+                oParagraph.AddText(`[${Asc.scope.bookmark_idx.toString()}]`);
+                oDocument.InsertContent([oParagraph], true);
+                //oParagraph.AddBookmarkCrossRef("text", Asc.scope.bookmark_id, true)
+            });
+            // this.executeMethod('AddContentControl', [2, {"Id": article_id, "Tag": index, "Lock": 3}], onAddCiteCC);
         }
 
         const addBibBtnClickHandler = async () => {
@@ -223,6 +223,7 @@ function debounce(func, wait, immediate) {
                 const arrDocuments = [{
                     "Props": {
                         "InternalId": _cc.InternalId,
+                        "Id": _cc.Id,
                         "Appearance": 2
                     },
                     "Script": `
@@ -263,8 +264,8 @@ function debounce(func, wait, immediate) {
             }
             this.callCommand(() => {
                 const oDocument = Api.GetDocument();
-                const oParagpraph = oDocument.GetElement(oDocument.GetElementsCount() - 1)
-                oParagpraph.AddPageBreak();
+                const oParagraph = oDocument.GetElement(oDocument.GetElementsCount() - 1)
+                oParagraph.AddPageBreak();
             })
             this.executeMethod("MoveCursorToEnd", [true], onMoveCursorToEnd);
 
@@ -273,6 +274,9 @@ function debounce(func, wait, immediate) {
 
         const updateArticleList = async () => {
             const doc = getDocumentFromLocalStorage();
+
+            if (!doc) throw 'Document not created'
+
             if (doc) {
                 elements.articleList.innerHTML = null;
                 const title = document.createElement('h2');
@@ -352,19 +356,15 @@ function debounce(func, wait, immediate) {
             return await response.json();
         }
 
-        const getArticleStringById = async (article_id) => {
-            const key = localStorage.getItem("x-api-key");
-            const response = await fetch(`${BASE_URI}/articles/${article_id}/str`,
-                {headers: headers});
-            return await response.json();
-        }
 
         const handleSearchResultItemClick = async (e) => {
             const article_id = e.target.getAttribute('data-article-id')
             const {id, articles} = getDocumentFromLocalStorage();
             updateDocumentById(id, [...articles, article_id])
                 .then((response) => {
-                    updateArticleList().then(() => console.log('Updated'));
+                    updateArticleList().then(() => {
+                        console.log('Bibliography updated on backend')
+                    });
                 })
         }
 
@@ -465,20 +465,35 @@ function debounce(func, wait, immediate) {
             elements.btnArticleList.style.display = 'none';
         }
 
-        if (!getDocId()) {
-            createNewDocumentInPal()
-                .then((data) => console.info(data))
-                .catch((error) => console.error(error))
-
-        } else {
-            getDocumentById(docId)
-                .then((data) => {
-                    console.log('Документ сохранен в локальное хранилище')
-                })
-                .catch((err) => console.error('С получение нового документа что-то пошло не так!', err))
+        const searchBibliographyInDocument = () => {
+            this.executeMethod("GetAllContentControls", null, (data) => {
+                let founded = false;
+                for (let i=0; i < data.length; i++) {
+                    if (founded) break
+                    if (data[i].Tag === 'bibliography') {
+                        console.log('Founded document id: ', data[i].Id)
+                        founded = true;
+                        setDocId(data[i].Id)
+                        let documentId = getDocId();
+                        getDocumentById(documentId)
+                            .then((data) => {
+                                console.log('Document received from backend and save in local storage')
+                                updateArticleList().then(() => console.log('Bibliography in plugin updated'))
+                            })
+                            .catch((err) => console.error('Document not received from backend', err))
+                    }
+                }
+                if (!founded) {
+                    createNewDocumentInPal()
+                        .then((data) => {console.info('New document created on backend', data)})
+                        .catch((error) => console.error(error))
+                }
+            });
         }
 
-        const key = localStorage.getItem("x-api-key");
+        searchBibliographyInDocument();
+
+        const key = getApiKey();
 
         if (key) {
             elements.authForm.style.display = 'none';
@@ -495,7 +510,7 @@ function debounce(func, wait, immediate) {
             elements.btnArticleList.style.display = 'none';
             elements.btnSearch.style.display = 'none';
         }
-        updateArticleList().then(() => console.log('Библиография обновлена'))
+
         elements.authForm.onsubmit = handleSubmit;
         elements.btnRemoveKey.onclick = handleRemoveKey;
         elements.searchInput.onkeyup = debounce(handleChange, 300);
@@ -503,7 +518,7 @@ function debounce(func, wait, immediate) {
         elements.btnSearch.onclick = showSearch;
     };
     window.Asc.plugin.button = (id) => {
-        if (id === -1) window.Asc.plugin.executeCommand("close", "");
+        window.Asc.plugin.executeCommand("close", "");
     };
 
 })(window, undefined);
