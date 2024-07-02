@@ -61,6 +61,31 @@ div#articles_list {
     grid-row-gap: 10px;
     margin: 5px 5px 5px 5px;
 }
+
+div#error_list {
+    display: none;
+    flex-direction: column;
+    padding: 3px;
+    margin: 3px;
+    border: 1px solid #ff7171;
+    border-radius: 3px;
+}
+
+div.text-error {
+    font-size: small;
+    font-weight: lighter;
+    margin: 10px;
+}
+
+div.text-error:before {
+    margin-right: 5px;
+    content: '🚫';
+}
+
+button.btn-close-error {
+    margin: 5px 10px;
+}
+
 .search_item_container {
     border: 1px solid rgba(62, 62, 62, 0.19);
     border-radius: 3px;

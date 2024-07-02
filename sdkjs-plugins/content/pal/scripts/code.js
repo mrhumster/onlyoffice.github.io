@@ -135,7 +135,25 @@ function debounce(func, wait, immediate) {
             btnRemoveKey: document.getElementById('btn_remove_key'),
             btnArticleList: document.getElementById('btn_article_list'),
             btnSearch: document.getElementById('btn_search'),
-            articleList: document.getElementById('articles_list')
+            articleList: document.getElementById('articles_list'),
+            errorList: document.getElementById('error_list')
+        }
+
+        const showError = (errorText) => {
+            elements.errorList.innerHTML = null;
+            elements.errorList.style.display = 'flex'
+            const closeButton = document.createElement('button')
+            closeButton.appendChild(document.createTextNode('Закрыть'));
+            closeButton.classList.add('btn-text-default');
+            closeButton.classList.add('btn-close-error');
+            const message = document.createElement('div')
+            message.classList.add('text-error')
+            message.appendChild(document.createTextNode(errorText))
+            elements.errorList.appendChild(message)
+            elements.errorList.appendChild(closeButton)
+            closeButton.addEventListener('click', () => {
+                elements.errorList.style.display = 'none';
+            })
         }
 
         const createNewDocumentInPal = async () => {
@@ -174,14 +192,17 @@ function debounce(func, wait, immediate) {
             return data
         }
 
-        const getBiblioByDocumentId = async (fmt, locale) => {
+        const getBibliographyByDocumentId = async (fmt, locale) => {
             const document = getDocumentFromLocalStorage();
             const response = await fetch(`${BASE_URI}/documents/${document.id}/str?${new URLSearchParams({
                     fmt: fmt,
                     locale: locale
                 })}`,
                 {headers: headers});
-
+            if (response.status === 400) {
+                const error = await response.json();
+                throw new Error(error['detail'])
+            }
             return await response.json()
         }
 
@@ -240,11 +261,13 @@ function debounce(func, wait, immediate) {
                     diffWithoutNotChanged[key] = diff[key]
                 }
             }
-            Asc.scope.diffWithoutNotChanged = diffWithoutNotChanged
+            Asc.scope.diffWithoutNotChanged = diffWithoutNotChanged;
             this.executeMethod("GetAllContentControls", null, (data) => {
                 for (let i = 0; i < data.length; i++) {
                     if (data[i].Tag.indexOf('bibliography') === -1) {
                         if (Asc.scope.diffWithoutNotChanged.hasOwnProperty(data[i].Tag)) {
+                            const citeId = Asc.scope.diffWithoutNotChanged[data[i].Tag].now
+                            const text = citeId ? `[${citeId}]` : ''
                             const arrDocuments = [{
                                 "Props": {
                                     "InternalId": data[i].InternalId,
@@ -252,33 +275,29 @@ function debounce(func, wait, immediate) {
                                 },
                                 "Script": `
                                     const cite = Api.CreateParagraph();
-                                    cite.AddText("[${Asc.scope.diffWithoutNotChanged[data[i].Tag].now}]");
+                                    cite.AddText("${text}");
                                     Api.GetDocument().InsertContent([cite], true, {KeepTextOnly: true});
                                 `
                             }]
                             this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
+                            if (!Asc.scope.diffWithoutNotChanged[data[i].Tag].now) {
+                                this.executeMethod("RemoveContentControl", [data[i].InternalId]);
+                            }
                         }
                     }
                 }
             })
         }
 
-        const addBibBtnClickHandler = async () => {
-            await getBiblioByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
-                .then((data) => {
-                    const diff = saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography)
-                    updateReferenceInDocument(diff);
-                })
-            const documentId = getDocId();
-            const onAddContentControl = (_cc) => {
-                saveContentControlBibliographyInternalIdToLocalStorage(_cc.InternalId)
-                const arrDocuments = [{
-                    "Props": {
-                        "InternalId": _cc.InternalId,
-                        "Id": documentId,
-                        "Appearance": 2
-                    },
-                    "Script": `
+        const onAddContentControl = (_cc) => {
+            saveContentControlBibliographyInternalIdToLocalStorage(_cc.InternalId)
+            const arrDocuments = [{
+                "Props": {
+                    "InternalId": _cc.InternalId,
+                    "Id": getDocId(),
+                    "Appearance": 2
+                },
+                "Script": `
                         const cites = JSON.parse(localStorage.getItem('${localStorageItemsKey.articlesCites}'));
                         const oDocument = Api.GetDocument();
                         const articlesStrings = cites['articles'];
@@ -302,28 +321,39 @@ function debounce(func, wait, immediate) {
                            oRange.AddBookmark(key);
                         });
                         `
-                }]
-                this.executeMethod("InsertAndReplaceContentControls", [arrDocuments], (_re) => {
-                    console.log(_re)
-                });
-            }
-            const onMoveCursorToEnd = () => {
-                this.executeMethod('AddContentControl', [1, {
-                    "Id": documentId,
-                    "Tag": `bibliography-${documentId}`,
-                    "Lock": 3,
-                    "Alias": "Библиография",
-                    "Appearance": 2
-                }], onAddContentControl);
-            }
-            this.callCommand(() => {
-                const oDocument = Api.GetDocument();
-                const oParagraph = oDocument.GetElement(oDocument.GetElementsCount() - 1)
-                oParagraph.AddPageBreak();
-            })
-            this.executeMethod("MoveCursorToEnd", [true], onMoveCursorToEnd);
+            }]
+            this.executeMethod("InsertAndReplaceContentControls", [arrDocuments], (_re) => {
+                console.log(_re)
+            });
+        }
 
+        const addBibBtnClickHandler = async () => {
+            /*
+             * Добавление библиографии в документ
+             */
+            await getBibliographyByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
+                .then((data) => {
+                    const diff = saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography)
+                    updateReferenceInDocument(diff);
+                    const documentId = getDocId();
 
+                    const onMoveCursorToEnd = () => {
+                        this.executeMethod('AddContentControl', [1, {
+                            "Id": documentId,
+                            "Tag": `bibliography-${documentId}`,
+                            "Lock": 3,
+                            "Alias": "Библиография",
+                            "Appearance": 2
+                        }], onAddContentControl);
+                    }
+                    this.callCommand(() => {
+                        const oDocument = Api.GetDocument();
+                        const oParagraph = oDocument.GetElement(oDocument.GetElementsCount() - 1)
+                        oParagraph.AddPageBreak();
+                    })
+                    this.executeMethod("MoveCursorToEnd", [true], onMoveCursorToEnd);
+                })
+                .catch((error) => showError(error))
         }
 
         const updateArticleList = async () => {
@@ -378,9 +408,7 @@ function debounce(func, wait, immediate) {
                             elements.articleList.appendChild(pastInTextButton);
                             elements.articleList.appendChild(removeBtn);
                         })
-                        .catch((error) => {
-                            console.log(error);
-                        })
+                        .catch((error) => showError(error))
                 });
             }
         }
@@ -413,18 +441,17 @@ function debounce(func, wait, immediate) {
             if (!contentControlInternalId) throw 'Not found internal id for bibliography content control in local storage';
             const documentId = getDocId();
             if (!documentId) throw 'Not found document id in local storage'
-            await getBiblioByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
+            await getBibliographyByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
                 .then((data) => {
                     const diff = saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography)
                     updateReferenceInDocument(diff);
-                })
-            const arrDocuments = [{
-                "Props": {
-                    "InternalId": contentControlInternalId,
-                    "Id": documentId,
-                    "Appearance": 2
-                },
-                "Script": `
+                    const arrDocuments = [{
+                        "Props": {
+                            "InternalId": contentControlInternalId,
+                            "Id": documentId,
+                            "Appearance": 2
+                        },
+                        "Script": `
                         const cites = JSON.parse(localStorage.getItem('${localStorageItemsKey.articlesCites}'));
                         const oDocument = Api.GetDocument();
                         const articlesStrings = cites['articles'];
@@ -448,8 +475,11 @@ function debounce(func, wait, immediate) {
                            oRange.AddBookmark(key);
                         });
                         `
-            }]
-            this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
+                    }]
+                    this.executeMethod("InsertAndReplaceContentControls", [arrDocuments]);
+                })
+                .catch((error) => showError(error))
+
         }
 
         const handleSearchResultItemClick = async (e) => {
@@ -562,14 +592,11 @@ function debounce(func, wait, immediate) {
         }
 
         const searchBibliographyInDocument = () => {
-            console.log('Start search bibliography in document');
             this.executeMethod("GetAllContentControls", null, (data) => {
                 let founded = false;
                 for (let i = 0; i < data.length; i++) {
-                    console.log(data[i]);
                     if (founded) break
                     if (data[i].Tag.indexOf('bibliography') !== -1) {
-                        console.log('Founded document id: ', data[i].Id);
                         founded = true;
                         setDocId(data[i].Tag.split('-')[1]);
                         saveContentControlBibliographyInternalIdToLocalStorage(data[i].InternalId);
@@ -578,6 +605,11 @@ function debounce(func, wait, immediate) {
                             .then((data) => {
                                 console.log('Document received from backend and save in local storage')
                                 updateArticleList().then(() => console.log('Bibliography in plugin updated'))
+                                // TODO: Надо добавить сохранение ссылок в хранилище
+                                getBibliographyByDocumentId('gost-r-7-0-5-2008', 'ru-RU').then((data) => {
+                                    saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography);
+                                })
+
                             })
                             .catch((err) => console.error('Document not received from backend', err))
                     }
