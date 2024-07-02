@@ -14,6 +14,12 @@ const truncateString = (string, length = 20) => {
     return string
 }
 
+const erasePalArtifactsInLocalStorage = () => {
+    localStorage.removeItem(localStorageItemsKey.docId)
+    localStorage.removeItem(localStorageItemsKey.palDoc)
+    localStorage.removeItem(localStorageItemsKey.articlesCites)
+    localStorage.removeItem(localStorageItemsKey.bibliographyContentControl)
+}
 
 const urlify = (text) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -70,21 +76,24 @@ const getArticleStringsFromLocalStorage = () => {
     return JSON.parse(cites)
 }
 
+
 const saveArticleStringsToLocalStorageAndReturnDifference = (lst) => {
     const oldArticleList = getArticleStringsFromLocalStorage();
     const indexDifferences = {}
-    for (let article_id in oldArticleList) {
-        indexDifferences[article_id] = {
-            "was": oldArticleList.hasOwnProperty(article_id) ? oldArticleList[article_id].index : null,
-            "now": lst.hasOwnProperty(article_id) ? lst[article_id].index : null
-        }
-    }
-    for (let article_id in lst) {
-        if (!indexDifferences.hasOwnProperty(article_id))
+    if (oldArticleList) {
+        for (let article_id in oldArticleList) {
             indexDifferences[article_id] = {
                 "was": oldArticleList.hasOwnProperty(article_id) ? oldArticleList[article_id].index : null,
                 "now": lst.hasOwnProperty(article_id) ? lst[article_id].index : null
             }
+        }
+        for (let article_id in lst) {
+            if (!indexDifferences.hasOwnProperty(article_id))
+                indexDifferences[article_id] = {
+                    "was": oldArticleList.hasOwnProperty(article_id) ? oldArticleList[article_id].index : null,
+                    "now": lst.hasOwnProperty(article_id) ? lst[article_id].index : null
+                }
+        }
     }
     localStorage.setItem(localStorageItemsKey.articlesCites, JSON.stringify(lst));
     return indexDifferences
@@ -95,6 +104,7 @@ const saveContentControlBibliographyInternalIdToLocalStorage = (value) => {
 }
 
 const getContentControlBibliographyInternalIdFromLocalStorage = () => {
+    /* Вернуть идентификатор блока ContentControl для библиографии */
     return localStorage.getItem(localStorageItemsKey.bibliographyContentControl)
 }
 
@@ -116,6 +126,7 @@ function debounce(func, wait, immediate) {
 
 (function (window, undefined) {
     window.Asc.plugin.init = function () {
+        erasePalArtifactsInLocalStorage();
         const elements = {
             searchInput: document.getElementById('search_input'),
             search: document.getElementById('search'),
@@ -128,7 +139,6 @@ function debounce(func, wait, immediate) {
         }
 
         const createNewDocumentInPal = async () => {
-            const key = localStorage.getItem(localStorageItemsKey.apiKey);
             const response = await fetch(`${BASE_URI}/documents`,
                 {
                     method: "POST",
@@ -233,7 +243,7 @@ function debounce(func, wait, immediate) {
             Asc.scope.diffWithoutNotChanged = diffWithoutNotChanged
             this.executeMethod("GetAllContentControls", null, (data) => {
                 for (let i = 0; i < data.length; i++) {
-                    if (data[i].Tag !== 'bibliography') {
+                    if (data[i].Tag.indexOf('bibliography') === -1) {
                         if (Asc.scope.diffWithoutNotChanged.hasOwnProperty(data[i].Tag)) {
                             const arrDocuments = [{
                                 "Props": {
@@ -265,7 +275,7 @@ function debounce(func, wait, immediate) {
                 const arrDocuments = [{
                     "Props": {
                         "InternalId": _cc.InternalId,
-                        "Id": _cc.Id,
+                        "Id": documentId,
                         "Appearance": 2
                     },
                     "Script": `
@@ -300,7 +310,7 @@ function debounce(func, wait, immediate) {
             const onMoveCursorToEnd = () => {
                 this.executeMethod('AddContentControl', [1, {
                     "Id": documentId,
-                    "Tag": "bibliography",
+                    "Tag": `bibliography-${documentId}`,
                     "Lock": 3,
                     "Alias": "Библиография",
                     "Appearance": 2
@@ -552,14 +562,16 @@ function debounce(func, wait, immediate) {
         }
 
         const searchBibliographyInDocument = () => {
+            console.log('Start search bibliography in document');
             this.executeMethod("GetAllContentControls", null, (data) => {
                 let founded = false;
                 for (let i = 0; i < data.length; i++) {
+                    console.log(data[i]);
                     if (founded) break
-                    if (data[i].Tag === 'bibliography') {
+                    if (data[i].Tag.indexOf('bibliography') !== -1) {
                         console.log('Founded document id: ', data[i].Id);
                         founded = true;
-                        setDocId(data[i].Id);
+                        setDocId(data[i].Tag.split('-')[1]);
                         saveContentControlBibliographyInternalIdToLocalStorage(data[i].InternalId);
                         let documentId = getDocId();
                         getDocumentById(documentId)
@@ -607,6 +619,7 @@ function debounce(func, wait, immediate) {
         elements.btnSearch.onclick = showSearch;
     };
     window.Asc.plugin.button = (id) => {
+        erasePalArtifactsInLocalStorage();
         window.Asc.plugin.executeCommand("close", "");
     };
 
