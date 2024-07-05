@@ -1,5 +1,5 @@
 {
-  "name" : "Personal article library",
+  "name" : "CitationsHub",
   "nameLocale": {
     "ru": "Персональная библиотека ссылок"
   },
@@ -8,9 +8,9 @@
 
   "variations" : [
     {
-      "description": "Create bibliographies and insert citations using the PAL service.",
+      "description": "Create bibliographies and insert citations using the CitationsHub service.",
       "descriptionLocale": {
-        "ru": "Работайте с библиографиями и цитированием, используя сервис PAL."
+        "ru": "Работайте с библиографиями и цитированием, используя сервис CitationsHub."
       },
       "url": "index.html",
       "icons": [ "resources/light/icon.png", "resources/light/icon@2x.png" ],

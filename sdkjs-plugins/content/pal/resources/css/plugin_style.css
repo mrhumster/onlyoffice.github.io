@@ -398,3 +398,7 @@ button#login {
     font-size: 14px;
     font-weight: lighter;
 }
+
+.asc-loader-container {
+    position: relative;
+}
