@@ -3,7 +3,8 @@ const localStorageItemsKey = {
     palDoc: 'pal-doc',
     apiKey: 'x-api-key',
     articlesCites: 'pal-articles-cites',
-    bibliographyContentControl: 'pal-bib-internal-id'
+    bibliographyContentControl: 'pal-bib-internal-id',
+    styles: 'pal-styles'
 }
 
 const BASE_URI = 'https://pal.test.vniigaz.local/api'
@@ -34,6 +35,14 @@ const normalizeHighLight = (s) => {
 
 const getApiKey = () => {
     return localStorage.getItem(localStorageItemsKey.apiKey)
+}
+
+const setStyles = (value) => {
+    return localStorage.setItem(localStorageItemsKey.styles, JSON.stringify(value));
+}
+
+const getStyles = () => {
+    return JSON.parse(localStorage.getItem(localStorageItemsKey.styles));
 }
 
 const setApiKey = (value) => {
@@ -136,7 +145,8 @@ function debounce(func, wait, immediate) {
             btnArticleList: document.getElementById('btn_article_list'),
             btnSearch: document.getElementById('btn_search'),
             articleList: document.getElementById('articles_list'),
-            errorList: document.getElementById('error_list')
+            errorList: document.getElementById('error_list'),
+
         }
 
         const showError = (errorText) => {
@@ -170,6 +180,15 @@ function debounce(func, wait, immediate) {
             return data
         }
 
+        const fetchStyles = async () => {
+            // TODO: Переделать на получение стандартных стилей пользователя
+            const response = await fetch(`${BASE_URI}/articles/styles/`, {headers: headers})
+            const data = await response.json();
+            data.then((value) => {
+                setStyles(value);
+            })
+            return data
+        }
 
         const getDocumentById = async (document_id) => {
             const response = await fetch(`${BASE_URI}/documents/${document_id}`, {
@@ -206,7 +225,7 @@ function debounce(func, wait, immediate) {
             return await response.json()
         }
 
-        const handleSubmit = (e) => {
+        const onClickSetApiKeyHandle = (e) => {
             const api_key = e.target.elements['api_key'].value;
             localStorage.setItem("x-api-key", api_key);
             elements.authForm.style.display = 'none';
@@ -214,7 +233,7 @@ function debounce(func, wait, immediate) {
             elements.search.style.display = 'none';
         }
 
-        const removeArticleFromDocumentClickHandler = async (e) => {
+        const onClickRemoveArticleFromDocumentHandler = async (e) => {
             const article_id = e.target.getAttribute('data-article-id');
             const articles = getDocumentFromLocalStorage().articles.filter((item) => item !== article_id);
             const document_id = getDocumentFromLocalStorage().id;
@@ -227,7 +246,7 @@ function debounce(func, wait, immediate) {
                 })
         }
 
-        const pastInTextButtonClickHandler = async (e) => {
+        const onClickPastInTextButtonHandler = async (e) => {
             const article_id = e.target.getAttribute('data-article-id');
             const index = getArticleStringsFromLocalStorage()[article_id]['index']
             Asc.scope.bookmark_id = article_id
@@ -363,26 +382,29 @@ function debounce(func, wait, immediate) {
 
             if (doc) {
                 elements.articleList.innerHTML = null;
+                /*
                 const title = document.createElement('h2');
                 title.style.gridColumn = "span 3 / span 3";
-                title.style.textAlign = "center";
+                title.style.textAlign = "left";
                 title.appendChild(document.createTextNode('Библиография'));
+                 */
                 const btnCont = document.createElement('div');
                 btnCont.classList.add('buttons_container');
                 btnCont.style.gridColumn = "span 3 / span 3";
                 const addBibBtn = document.createElement('button');
-                addBibBtn.appendChild(document.createTextNode('Вставить библиографию'));
-                addBibBtn.classList.add('btn-text-default');
+                addBibBtn.appendChild(document.createTextNode('Вставить библиографию в документ'));
+                addBibBtn.classList.add("w-xxl", "border", "hover-hl");
                 addBibBtn.id = 'btn_add_bib';
                 addBibBtn.onclick = addBibBtnClickHandler;
                 btnCont.appendChild(addBibBtn)
-                elements.articleList.appendChild(title)
+                // elements.articleList.appendChild(title)
                 elements.articleList.appendChild(btnCont)
                 doc['articles'].map((articleId) => {
                     const response = getArticleById(articleId);
                     response
                         .then((article) => {
                             const articleTitle = document.createElement('div')
+                            articleTitle.classList.add('article-title')
                             articleTitle.style.display = 'flex';
                             articleTitle.style.justifyContent = 'center';
                             articleTitle.style.alignContent = 'center';
@@ -391,18 +413,17 @@ function debounce(func, wait, immediate) {
                             articleTitle.appendChild(document.createTextNode(article['title']))
 
                             const pastInTextButton = document.createElement('button');
-                            pastInTextButton.classList.add("btn-text-default");
+                            pastInTextButton.classList.add("w-xxs", "no-border", "hover-hl", "add-article-button");
                             pastInTextButton.setAttribute('data-article-id', article['id']);
-                            pastInTextButton.appendChild(document.createTextNode('⬆'));
-                            pastInTextButton.addEventListener('click', pastInTextButtonClickHandler)
-                            pastInTextButton.title = 'Вставить в документ ссылку';
+
+                            pastInTextButton.addEventListener('click', onClickPastInTextButtonHandler)
+                            pastInTextButton.setAttribute('data-title-left', 'Вставить в документ ссылку');
 
                             const removeBtn = document.createElement('button');
-                            removeBtn.classList.add("btn-text-default");
+                            removeBtn.classList.add("w-xxs", "no-border", "hover-hl","remove-article-button");
                             removeBtn.setAttribute('data-article-id', article['id']);
-                            removeBtn.appendChild(document.createTextNode('🚫'));
-                            removeBtn.addEventListener('click', removeArticleFromDocumentClickHandler);
-                            removeBtn.title = 'Удалить из библиографии';
+                            removeBtn.addEventListener('click', onClickRemoveArticleFromDocumentHandler);
+                            removeBtn.setAttribute('data-title-left','Удалить из библиографии');
 
                             elements.articleList.appendChild(articleTitle);
                             elements.articleList.appendChild(pastInTextButton);
@@ -417,10 +438,21 @@ function debounce(func, wait, immediate) {
             elements.authForm.style.display = 'none';
             elements.search.style.display = 'none';
             elements.articleList.style.display = 'grid';
+            elements.btnArticleList.classList.add('active');
+            elements.btnSearch.classList.remove('active');
+
         }
         const showSearch = () => {
             elements.authForm.style.display = 'none';
             elements.search.style.display = 'flex';
+            elements.btnSearch.classList.add('active');
+            elements.btnArticleList.classList.remove('active');
+            elements.articleList.style.display = 'none';
+        }
+
+        const showSettings = () => {
+            elements.authForm.style.display = 'none';
+            elements.search.style.display = 'none';
             elements.articleList.style.display = 'none';
         }
 
@@ -482,7 +514,7 @@ function debounce(func, wait, immediate) {
 
         }
 
-        const handleSearchResultItemClick = async (e) => {
+        const onClickSearchResultItemHandler = async (e) => {
             const article_id = e.target.getAttribute('data-article-id')
             const {id, articles} = getDocumentFromLocalStorage();
             updateDocumentById(id, [...articles, article_id])
@@ -497,42 +529,37 @@ function debounce(func, wait, immediate) {
         const createListResult = (response) => {
             elements.searchResult.innerHTML = null
 
-            const createArticleSearchItem = async (articleId) => {
-                // TODO: Create article search item
-                const article = await getArticleById(articleId)
-                const container = document.createElement('div')
-                container.style.display = 'grid';
-                container.style.gridTemplateColumns = '85% 15%'
-                const titleCont = document.createElement('div');
-                titleCont.appendChild(document.createTextNode(article.title));
-
-                const addButton = document.createElement('button')
-                addButton.appendChild(document.createTextNode('➕'))
-                addButton.classList.add('btn-text-default');
-                addButton.setAttribute('data-article-id', articleId)
-                addButton.onclick = handleSearchResultItemClick;
-                container.appendChild(titleCont);
-                container.appendChild(addButton);
-                return container;
-            }
-
             const renderSearchResult = async (element, index, array) => {
                 // const articleSearchItem = await createArticleSearchItem(articleId)
                 const container = document.createElement('div')
-                container.classList.add('search_item_container')
+                container.classList.add('search-item-container')
                 const titleCont = document.createElement('div');
                 titleCont.style.display = 'flex';
                 titleCont.style.flexDirection = 'column';
                 if (element.title) {
                     const title = document.createElement('div')
-                    title.classList.add('search_item_container_title')
+                    title.classList.add('search-item-container-title')
                     title.appendChild(document.createTextNode(element.title))
                     titleCont.appendChild(title)
                 }
+
+                const buttonsCont = document.createElement('div')
+                buttonsCont.classList.add('search-item-container-buttons-container')
+                const addButton = document.createElement('button')
+                const openInWebButton = document.createElement('button')
+                openInWebButton.classList.add("w-xxs", "no-border", "hover-hl", "open-in-web-btn");
+                openInWebButton.setAttribute('data-title', 'Открыть ссылку в web версии')
+                addButton.classList.add("w-xxs", "no-border", "hover-hl", "add-to-document-btn");
+                addButton.setAttribute('data-article-id', element.id)
+                addButton.setAttribute('data-title', 'Добавить ссылку в библиографию')
+                addButton.onclick = onClickSearchResultItemHandler;
+                buttonsCont.appendChild(addButton);
+                buttonsCont.appendChild(openInWebButton);
+                titleCont.appendChild(buttonsCont)
                 if (element.file_name) {
                     const fileName = document.createElement('div')
-                    fileName.classList.add('search_item_container_file')
-                    fileName.title = element.file_name;
+                    fileName.classList.add('search-item-container-file')
+                    fileName.setAttribute('data-title-center',element.file_name);
                     fileName.appendChild(document.createTextNode(truncateString(element.file_name, 50)))
                     titleCont.appendChild(fileName)
                 }
@@ -541,27 +568,15 @@ function debounce(func, wait, immediate) {
                         value.map((_hl) => {
                             const hl = document.createElement('div');
                             hl.insertAdjacentHTML('beforeend', normalizeHighLight(_hl));
-                            hl.classList.add('search_item_container_highlight');
+                            hl.classList.add('search-item-container-highlight');
                             titleCont.appendChild(hl);
                         })
                     }
                 }
-                const buttonsCont = document.createElement('div')
-                buttonsCont.classList.add('search_item_container_buttons_container')
-                const addButton = document.createElement('button')
-                addButton.appendChild(document.createTextNode('Добавить в библиографию'))
-                const openInWebButton = document.createElement('button')
-                openInWebButton.appendChild(document.createTextNode('Открыть в браузере'))
-                openInWebButton.classList.add('btn-text-default');
-                openInWebButton.classList.add('open_in_web_btn');
-                addButton.classList.add('btn-text-default');
-                addButton.classList.add('add_to_document_btn');
-                addButton.setAttribute('data-article-id', element.id)
-                addButton.onclick = handleSearchResultItemClick;
-                buttonsCont.appendChild(addButton);
-                buttonsCont.appendChild(openInWebButton);
+
+
                 container.appendChild(titleCont);
-                container.appendChild(buttonsCont)
+
 
                 elements.searchResult.appendChild(container);
 
@@ -583,7 +598,7 @@ function debounce(func, wait, immediate) {
 
         const handleRemoveKey = () => {
             localStorage.removeItem("x-api-key")
-            elements.authForm.style.display = 'block';
+            elements.authForm.style.display = 'flex';
             elements.search.style.display = 'none';
             elements.articleList.style.display = 'none';
             elements.btnRemoveKey.style.display = 'none'
@@ -605,10 +620,8 @@ function debounce(func, wait, immediate) {
                             .then((data) => {
                                 console.log('Document received from backend and save in local storage')
                                 updateArticleList().then(() => console.log('Bibliography in plugin updated'))
-                                // TODO: Надо добавить сохранение ссылок в хранилище
-                                getBibliographyByDocumentId('gost-r-7-0-5-2008', 'ru-RU').then((data) => {
-                                    saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography);
-                                })
+                                getBibliographyByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
+                                    .then((data) => saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography))
 
                             })
                             .catch((err) => console.error('Document not received from backend', err))
@@ -633,6 +646,7 @@ function debounce(func, wait, immediate) {
             elements.btnRemoveKey.style.display = 'block';
             elements.articleList.style.display = 'none'
             elements.search.style.display = 'flex';
+            elements.btnSearch.classList.add('active')
             elements.btnArticleList.style.display = 'block';
             elements.btnSearch.style.display = 'block';
         } else {
@@ -644,11 +658,12 @@ function debounce(func, wait, immediate) {
             elements.btnSearch.style.display = 'none';
         }
 
-        elements.authForm.onsubmit = handleSubmit;
+        elements.authForm.onsubmit = onClickSetApiKeyHandle;
         elements.btnRemoveKey.onclick = handleRemoveKey;
         elements.searchInput.onkeyup = debounce(handleChange, 300);
         elements.btnArticleList.onclick = showList;
         elements.btnSearch.onclick = showSearch;
+
     };
     window.Asc.plugin.button = (id) => {
         erasePalArtifactsInLocalStorage();

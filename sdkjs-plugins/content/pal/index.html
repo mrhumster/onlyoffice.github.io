@@ -10,25 +10,31 @@
     <script src="scripts/thirdparty/promise-polyfill.min.js"></script>
     <script src="scripts/thirdparty/url-polyfill.min.js"></script>
     <link rel="stylesheet" href="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script type="text/javascript" src="scripts/code.js"></script>
 </head>
 <body style="width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;">
     <div id="error_list">
     </div>
-    <div id="button_panel">
-        <button id="btn_search" class="btn-text-default">Поиск</button>
-        <button id="btn_article_list" class="btn-text-default">Библиография</button>
-        <button id="btn_remove_key" class="btn-text-default">Выйти</button>
+    <div id="button-panel">
+        <button id="btn_search" class="w-xxs no-border hover-hl" data-title="Поиск в БД"></button>
+        <button id="btn_article_list" class="w-xxs no-border hover-hl" data-title="Список ссылок добавленных в документ"></button>
+        <button id="btn_remove_key" class="w-xxs no-border hover-hl" data-title="Выйти"></button>
     </div>
     <form id="auth">
-        <label class="header">Необходима авторизация</label>
-        <label for="api_key"></label>
-        <input class="form-control" type="text" id="api_key" name="key" placeholder="Введи ключ приложения">
-        <button class="btn-text-default submit primary" type="submit" id="login">Ок</button>
+        <h3 class="auth-header">Необходима авторизация</h3>
+        <div id="api-key-info">Для создания ключа приложения, зайдите в настройки пользователя в web версии.</div>
+        <div>
+            <label for="api_key"></label>
+            <input class="form-control" type="text" id="api_key" name="key" placeholder="Введи ключ приложения" />
+        </div>
+        <button class="w-xl submit border hover-hl" type="submit" id="login">Авторизоваться</button>
     </form>
     <div id="search">
         <label for="search_input"></label>
-        <input class="form-control" type="search" id="search_input" placeholder="Введите поисковой запрос...">
+        <input class="form-control" type="search" id="search_input" placeholder="Введите поисковой запрос..." />
         <div id="search_result"></div>
     </div>
     <div id="articles_list">
