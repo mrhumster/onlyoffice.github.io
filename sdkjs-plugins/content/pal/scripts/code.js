@@ -4,7 +4,8 @@ const localStorageItemsKey = {
     apiKey: 'x-api-key',
     articlesCites: 'pal-articles-cites',
     bibliographyContentControl: 'pal-bib-internal-id',
-    styles: 'pal-styles'
+    styles: 'pal-styles',
+    locale: 'pal-locale'
 }
 
 const BASE_URI = 'https://pal.test.vniigaz.local/api'
@@ -24,7 +25,7 @@ const erasePalArtifactsInLocalStorage = () => {
 
 const urlify = (text) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, function (url) {
+    return text.replace(urlRegex, function(url) {
         return '<a href="' + url + '" target="_blank">' + url + '</a>';
     })
 }
@@ -37,6 +38,14 @@ const getApiKey = () => {
     return localStorage.getItem(localStorageItemsKey.apiKey)
 }
 
+const setApiKey = (value) => {
+    return localStorage.setItem(localStorageItemsKey.apiKey, value)
+}
+
+const delApiKey = () => {
+    return localStorage.removeItem(localStorageItemsKey.apiKey)
+}
+
 const setStyles = (value) => {
     return localStorage.setItem(localStorageItemsKey.styles, JSON.stringify(value));
 }
@@ -45,12 +54,12 @@ const getStyles = () => {
     return JSON.parse(localStorage.getItem(localStorageItemsKey.styles));
 }
 
-const setApiKey = (value) => {
-    return localStorage.setItem(localStorageItemsKey.apiKey, value)
+const setLocale = (value) => {
+    return localStorage.setItem(localStorageItemsKey.locale, JSON.stringify(value));
 }
 
-const delApiKey = () => {
-    return localStorage.removeItem(localStorageItemsKey.apiKey)
+const getLocale = () => {
+    return JSON.parse(localStorage.getItem(localStorageItemsKey.locale));
 }
 
 const getDocId = () => {
@@ -119,9 +128,9 @@ const getContentControlBibliographyInternalIdFromLocalStorage = () => {
 
 function debounce(func, wait, immediate) {
     let timeout;
-    return function () {
+    return function() {
         const context = this, args = arguments;
-        const later = function () {
+        const later = function() {
             timeout = null;
             if (!immediate) func.apply(context, args);
         };
@@ -133,8 +142,8 @@ function debounce(func, wait, immediate) {
 }
 
 
-(function (window, undefined) {
-    window.Asc.plugin.init = function () {
+(function(window, undefined) {
+    window.Asc.plugin.init = function() {
         erasePalArtifactsInLocalStorage();
         const elements = {
             searchInput: document.getElementById('search_input'),
@@ -171,7 +180,7 @@ function debounce(func, wait, immediate) {
                 {
                     method: "POST",
                     headers: headers,
-                    body: JSON.stringify({articles: []})
+                    body: JSON.stringify({ articles: [] })
                 }
             );
             const data = await response.json();
@@ -182,7 +191,7 @@ function debounce(func, wait, immediate) {
 
         const fetchStyles = async () => {
             // TODO: Переделать на получение стандартных стилей пользователя
-            const response = await fetch(`${BASE_URI}/articles/styles/`, {headers: headers})
+            const response = await fetch(`${BASE_URI}/articles/styles/`, { headers: headers })
             const data = await response.json();
             data.then((value) => {
                 setStyles(value);
@@ -214,15 +223,20 @@ function debounce(func, wait, immediate) {
         const getBibliographyByDocumentId = async (fmt, locale) => {
             const document = getDocumentFromLocalStorage();
             const response = await fetch(`${BASE_URI}/documents/${document.id}/str?${new URLSearchParams({
-                    fmt: fmt,
-                    locale: locale
-                })}`,
-                {headers: headers});
+                fmt: fmt,
+                locale: locale
+            })}`,
+                { headers: headers });
             if (response.status === 400) {
                 const error = await response.json();
                 throw new Error(error['detail'])
             }
             return await response.json()
+        }
+
+        const getCurrentCiteSettings = async () => {
+            const response = await fetch(`${BASE_URI}/users`, { headers: headers });
+            return await response.json();
         }
 
         const onClickSetApiKeyHandle = (e) => {
@@ -350,7 +364,9 @@ function debounce(func, wait, immediate) {
             /*
              * Добавление библиографии в документ
              */
-            await getBibliographyByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
+            const style = getStyles();
+            const locale = getLocale();
+            await getBibliographyByDocumentId(style.defaultCiteStyleId, locale.id)
                 .then((data) => {
                     const diff = saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography)
                     updateReferenceInDocument(diff);
@@ -420,10 +436,10 @@ function debounce(func, wait, immediate) {
                             pastInTextButton.setAttribute('data-title-left', 'Вставить в документ ссылку');
 
                             const removeBtn = document.createElement('button');
-                            removeBtn.classList.add("w-xxs", "no-border", "hover-hl","remove-article-button");
+                            removeBtn.classList.add("w-xxs", "no-border", "hover-hl", "remove-article-button");
                             removeBtn.setAttribute('data-article-id', article['id']);
                             removeBtn.addEventListener('click', onClickRemoveArticleFromDocumentHandler);
-                            removeBtn.setAttribute('data-title-left','Удалить из библиографии');
+                            removeBtn.setAttribute('data-title-left', 'Удалить из библиографии');
 
                             elements.articleList.appendChild(articleTitle);
                             elements.articleList.appendChild(pastInTextButton);
@@ -457,14 +473,14 @@ function debounce(func, wait, immediate) {
         }
 
         const getSearchResult = async (query) => {
-            const response = await fetch(`${BASE_URI}/search?` + new URLSearchParams({query: query}),
-                {headers: headers});
+            const response = await fetch(`${BASE_URI}/search?` + new URLSearchParams({ query: query }),
+                { headers: headers });
             return await response.json();
         }
 
         const getArticleById = async (article_id) => {
             const response = await fetch(`${BASE_URI}/articles/${article_id}`,
-                {headers: headers});
+                { headers: headers });
             return await response.json();
         }
 
@@ -473,7 +489,9 @@ function debounce(func, wait, immediate) {
             if (!contentControlInternalId) throw 'Not found internal id for bibliography content control in local storage';
             const documentId = getDocId();
             if (!documentId) throw 'Not found document id in local storage'
-            await getBibliographyByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
+            const style = getStyles();
+            const locale = getLocale();
+            await getBibliographyByDocumentId(style.defaultCiteStyleId, locale.id)
                 .then((data) => {
                     const diff = saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography)
                     updateReferenceInDocument(diff);
@@ -516,7 +534,7 @@ function debounce(func, wait, immediate) {
 
         const onClickSearchResultItemHandler = async (e) => {
             const article_id = e.target.getAttribute('data-article-id')
-            const {id, articles} = getDocumentFromLocalStorage();
+            const { id, articles } = getDocumentFromLocalStorage();
             updateDocumentById(id, [...articles, article_id])
                 .then((response) => {
                     updateArticleList()
@@ -559,7 +577,7 @@ function debounce(func, wait, immediate) {
                 if (element.file_name) {
                     const fileName = document.createElement('div')
                     fileName.classList.add('search-item-container-file')
-                    fileName.setAttribute('data-title-center',element.file_name);
+                    fileName.setAttribute('data-title-center', element.file_name);
                     fileName.appendChild(document.createTextNode(truncateString(element.file_name, 50)))
                     titleCont.appendChild(fileName)
                 }
@@ -620,7 +638,9 @@ function debounce(func, wait, immediate) {
                             .then((data) => {
                                 console.log('Document received from backend and save in local storage')
                                 updateArticleList().then(() => console.log('Bibliography in plugin updated'))
-                                getBibliographyByDocumentId('gost-r-7-0-5-2008', 'ru-RU')
+                                const style = getStyles();
+                                const locale = getLocale();
+                                getBibliographyByDocumentId(style.defaultCiteStyleId, locale.id)
                                     .then((data) => saveArticleStringsToLocalStorageAndReturnDifference(data.bibliography))
 
                             })
@@ -636,6 +656,14 @@ function debounce(func, wait, immediate) {
                 }
             });
         }
+
+        getCurrentCiteSettings()
+            .then(data => {
+                console.log('Getting curent style');
+                setStyles(data.style);
+                setLocale(data.locale);
+            })
+            .catch(error => console.log('Problem with getting settings.', error));
 
         searchBibliographyInDocument();
 
