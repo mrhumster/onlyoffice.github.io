@@ -189,16 +189,6 @@ function debounce(func, wait, immediate) {
             return data
         }
 
-        const fetchStyles = async () => {
-            // TODO: Переделать на получение стандартных стилей пользователя
-            const response = await fetch(`${BASE_URI}/articles/styles/`, { headers: headers })
-            const data = await response.json();
-            data.then((value) => {
-                setStyles(value);
-            })
-            return data
-        }
-
         const getDocumentById = async (document_id) => {
             const response = await fetch(`${BASE_URI}/documents/${document_id}`, {
                 headers: headers
@@ -252,7 +242,7 @@ function debounce(func, wait, immediate) {
             const articles = getDocumentFromLocalStorage().articles.filter((item) => item !== article_id);
             const document_id = getDocumentFromLocalStorage().id;
             await updateDocumentById(document_id, articles)
-                .then((response) => {
+                .then(() => {
                     updateArticleList()
                         .then(() => console.log('Bibliography updated in backend'));
                     updateBibliographyInDocument()
@@ -356,7 +346,7 @@ function debounce(func, wait, immediate) {
                         `
             }]
             this.executeMethod("InsertAndReplaceContentControls", [arrDocuments], (_re) => {
-                console.log(_re)
+                console.log('Bibliography has update');
             });
         }
 
@@ -398,12 +388,6 @@ function debounce(func, wait, immediate) {
 
             if (doc) {
                 elements.articleList.innerHTML = null;
-                /*
-                const title = document.createElement('h2');
-                title.style.gridColumn = "span 3 / span 3";
-                title.style.textAlign = "left";
-                title.appendChild(document.createTextNode('Библиография'));
-                 */
                 const btnCont = document.createElement('div');
                 btnCont.classList.add('buttons_container');
                 btnCont.style.gridColumn = "span 3 / span 3";
@@ -463,12 +447,6 @@ function debounce(func, wait, immediate) {
             elements.search.style.display = 'flex';
             elements.btnSearch.classList.add('active');
             elements.btnArticleList.classList.remove('active');
-            elements.articleList.style.display = 'none';
-        }
-
-        const showSettings = () => {
-            elements.authForm.style.display = 'none';
-            elements.search.style.display = 'none';
             elements.articleList.style.display = 'none';
         }
 
@@ -548,7 +526,6 @@ function debounce(func, wait, immediate) {
             elements.searchResult.innerHTML = null
 
             const renderSearchResult = async (element, index, array) => {
-                // const articleSearchItem = await createArticleSearchItem(articleId)
                 const container = document.createElement('div')
                 container.classList.add('search-item-container')
                 const titleCont = document.createElement('div');
@@ -582,7 +559,7 @@ function debounce(func, wait, immediate) {
                     titleCont.appendChild(fileName)
                 }
                 if (element.highlights) {
-                    for (let [name, value] of Object.entries(element.highlights)) {
+                    for (let [_, value] of Object.entries(element.highlights)) {
                         value.map((_hl) => {
                             const hl = document.createElement('div');
                             hl.insertAdjacentHTML('beforeend', normalizeHighLight(_hl));
@@ -602,14 +579,23 @@ function debounce(func, wait, immediate) {
             response.forEach(renderSearchResult);
         }
 
+        const createLoader = () => {
+            const loader = document.createElement('div');
+            loader.classList.add('loader')
+            return loader
+        }
+
         const handleChange = (e) => {
             const query = e.target.value;
-            const searchResult = getSearchResult(query)
+            elements.searchResult.innerHTML = '';
+            elements.searchResult.append(createLoader());
+            const searchResult = getSearchResult(query);
             searchResult
                 .then((response) => {
                     createListResult(response)
                 })
                 .catch((error) => {
+                    console.log('Search is broken', error)
                     handleRemoveKey()
                 })
         }
@@ -635,7 +621,7 @@ function debounce(func, wait, immediate) {
                         saveContentControlBibliographyInternalIdToLocalStorage(data[i].InternalId);
                         let documentId = getDocId();
                         getDocumentById(documentId)
-                            .then((data) => {
+                            .then((_) => {
                                 console.log('Document received from backend and save in local storage')
                                 updateArticleList().then(() => console.log('Bibliography in plugin updated'))
                                 const style = getStyles();
@@ -686,9 +672,40 @@ function debounce(func, wait, immediate) {
             elements.btnSearch.style.display = 'none';
         }
 
+
+        let debounceTimer;
+        const makeSearchRequest = (query) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const controller = new AbortController();
+                const signal = controller.signal;
+                elements.searchResult.innerHTML = null;
+                elements.searchResult.appendChild(createLoader());
+                getSearchResult(query)
+                    .then(response => {
+                        createListResult(response);
+                    })
+                    .catch(error => {
+                        if (error.name === 'AbortError') {
+                            // Abort
+                        } else {
+                            handleRemoveKey();
+                            console.log('Search is broken!', error)
+                        }
+                    })
+                    .finally(() => {
+                        // clean up logic
+                    })
+            }, 300);
+        }
+
         elements.authForm.onsubmit = onClickSetApiKeyHandle;
         elements.btnRemoveKey.onclick = handleRemoveKey;
-        elements.searchInput.onkeyup = debounce(handleChange, 300);
+        // elements.searchInput.onkeyup = debounce(handleChange, 500);
+        elements.searchInput.addEventListener('input', event => {
+            const query = event.target.value;
+            makeSearchRequest(query);
+        });
         elements.btnArticleList.onclick = showList;
         elements.btnSearch.onclick = showSearch;
 
