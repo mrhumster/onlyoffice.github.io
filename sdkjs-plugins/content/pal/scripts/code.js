@@ -8,7 +8,7 @@ const localStorageItemsKey = {
     locale: 'pal-locale'
 }
 
-const BASE_URI = 'https://pal.test.vniigaz.local/api'
+const BASE_URI = 'https://red.vniigaz.local/api'
 
 const truncateString = (string, length = 20) => {
     if (string.length > length)
@@ -450,9 +450,9 @@ function debounce(func, wait, immediate) {
             elements.articleList.style.display = 'none';
         }
 
-        const getSearchResult = async (query) => {
+        const getSearchResult = async (query, signal) => {
             const response = await fetch(`${BASE_URI}/search?` + new URLSearchParams({ query: query }),
-                { headers: headers });
+                { headers: headers, signal: signal });
             return await response.json();
         }
 
@@ -585,21 +585,6 @@ function debounce(func, wait, immediate) {
             return loader
         }
 
-        const handleChange = (e) => {
-            const query = e.target.value;
-            elements.searchResult.innerHTML = '';
-            elements.searchResult.append(createLoader());
-            const searchResult = getSearchResult(query);
-            searchResult
-                .then((response) => {
-                    createListResult(response)
-                })
-                .catch((error) => {
-                    console.log('Search is broken', error)
-                    handleRemoveKey()
-                })
-        }
-
         const handleRemoveKey = () => {
             localStorage.removeItem("x-api-key")
             elements.authForm.style.display = 'flex';
@@ -673,24 +658,27 @@ function debounce(func, wait, immediate) {
         }
 
 
+        let abort_controllers = []; // Collection of AbortControllers for canceled requests if user stil typing
         let debounceTimer;
         const makeSearchRequest = (query) => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
                 const controller = new AbortController();
+                abort_controllers.map(controller => controller.abort()); // Cancel all old requests
+                abort_controllers = []; // Erase collection with AbortControllers
+                abort_controllers.push(controller);
                 const signal = controller.signal;
-                elements.searchResult.innerHTML = null;
-                elements.searchResult.appendChild(createLoader());
-                getSearchResult(query)
-                    .then(response => {
-                        createListResult(response);
-                    })
+                elements.searchResult.innerHTML = null; // Erase list result 
+                elements.searchResult.appendChild(createLoader()); // and add loader
+                getSearchResult(query, signal)
+                    .then(response => createListResult(response))
                     .catch(error => {
                         if (error.name === 'AbortError') {
-                            // Abort
+                            console.log('Request has been cancelled')
                         } else {
-                            handleRemoveKey();
-                            console.log('Search is broken!', error)
+                            handleRemoveKey(); // If there is a error on backend then remove api key from local storage
+                            console.log(error);
+                            showError('Error auth'); // and show error in ui
                         }
                     })
                     .finally(() => {
